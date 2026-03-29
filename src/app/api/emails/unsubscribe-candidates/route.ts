@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailCache, emailAccounts } from "@/lib/db/schema";
-import { desc, count, eq, or, ilike, and, not } from "drizzle-orm";
+import { desc, count, eq, or, ilike, and, not, gt } from "drizzle-orm";
 import { decrypt } from "@/lib/encryption";
 
 export async function GET() {
@@ -49,7 +49,7 @@ export async function GET() {
         )
       )
       .groupBy(emailCache.senderEmail, emailCache.sender)
-      .having((rows) => rows.count >= 3) // At least 3 emails
+      .having(({ count }) => gt(count, 2)) // At least 3 emails
       .orderBy(desc(count()))
       .limit(200);
 
