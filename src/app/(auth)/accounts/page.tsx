@@ -236,42 +236,63 @@ export default function AccountsPage() {
               {accounts.map((account) => (
                 <div
                   key={account.id}
-                  className="flex items-center justify-between rounded-lg border p-4 hover:shadow-md transition-shadow"
+                  className="rounded-lg border p-4 hover:shadow-md transition-shadow"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-full ${
-                      account.provider === 'gmail' ? 'bg-red-100 text-red-600' :
-                      account.provider === 'outlook' ? 'bg-blue-100 text-blue-600' :
-                      'bg-orange-100 text-orange-600'
-                    }`}>
-                      <Mail className="h-5 w-5" />
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-full ${
+                        account.provider === 'gmail' ? 'bg-red-100 text-red-600' :
+                        account.provider === 'outlook' ? 'bg-blue-100 text-blue-600' :
+                        'bg-orange-100 text-orange-600'
+                      }`}>
+                        <Mail className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{account.emailAddress}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {PROVIDER_NAMES[account.provider] || account.provider}
+                          {account.displayName && ` • ${account.displayName}`}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{account.emailAddress}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {PROVIDER_NAMES[account.provider] || account.provider}
-                        {account.displayName && ` • ${account.displayName}`}
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs font-medium ${
+                          account.isActive
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {account.isActive ? "Active" : "Inactive"}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteAccount(account.id)}
+                        className="text-muted-foreground hover:text-red-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        account.isActive
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {account.isActive ? "Active" : "Inactive"}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteAccount(account.id)}
-                      className="text-muted-foreground hover:text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+
+                  {/* Sync section for this account */}
+                  <div className="border-t pt-3 mt-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">
+                        {account.lastSyncedAt ? (
+                          <span>Last synced: {new Date(account.lastSyncedAt).toLocaleString()}</span>
+                        ) : (
+                          <span>Not yet synced</span>
+                        )}
+                      </div>
+                      <SyncButton
+                        accountId={account.id}
+                        accountEmail={account.emailAddress}
+                        variant="outline"
+                        size="sm"
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
