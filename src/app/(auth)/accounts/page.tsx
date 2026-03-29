@@ -12,7 +12,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Mail, Trash2, RefreshCw, Plus, Shield } from "lucide-react";
+import { Mail, Trash2, RefreshCw, Plus, Shield, Inbox } from "lucide-react";
+import { SyncButton } from "@/components/sync-button";
 
 interface Account {
   id: string;
