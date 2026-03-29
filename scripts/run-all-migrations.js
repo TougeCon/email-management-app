@@ -1,6 +1,19 @@
 import postgres from "postgres";
+import { readFileSync } from "fs";
+import { join } from "path";
 
-const DATABASE_URL = process.env.DATABASE_URL;
+// Load .env file manually for ES module
+const envPath = join(process.cwd(), ".env");
+const envContent = readFileSync(envPath, "utf-8");
+const envVars = {};
+envContent.split("\n").forEach(line => {
+  const [key, value] = line.split("=");
+  if (key && value) {
+    envVars[key.trim()] = value.trim();
+  }
+});
+
+const DATABASE_URL = envVars.DATABASE_URL;
 
 if (!DATABASE_URL) {
   console.error("ERROR: DATABASE_URL environment variable is not set");
