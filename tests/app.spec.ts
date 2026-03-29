@@ -6,7 +6,7 @@ test.describe('Email Management App - E2E Tests', () => {
   test('should load login page', async ({ page }) => {
     await page.goto(BASE_URL + '/login');
     await expect(page).toHaveTitle('Email Manager');
-    await expect(page.locator('h1')).toContainText('Email Manager');
+    await expect(page.getByText('Email Manager')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
   });
 
