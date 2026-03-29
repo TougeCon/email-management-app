@@ -1,65 +1,99 @@
 import type { AIQueryContext } from "@/types";
 
-interface OllamaRequest {
+interface CloudAIRequest {
   model: string;
-  prompt: string;
+  messages: { role: string; content: string }[];
   stream?: boolean;
-  context?: number[];
+  temperature?: number;
 }
 
-interface OllamaResponse {
-  model: string;
-  created_at: string;
-  response: string;
-  done: boolean;
-  context?: number[];
-  total_duration?: number;
-  prompt_eval_count?: number;
-  eval_count?: number;
+interface CloudAIResponse {
+  choices?: { message: { content: string } }[];
+  message?: { content: string };
+  response?: string;
 }
 
 /**
- * Get the Ollama API URL from environment
+ * Get the AI API URL from environment
  */
-function getOllamaUrl(): string {
-  return process.env.OLLAMA_API_URL || "http://localhost:11434";
+function getApiUrl(): string {
+  return process.env.AI_API_URL || process.env.OLLAMA_API_URL || "https://api.openrouter.ai/api/v1";
+}
+
+/**
+ * Get the API key from environment
+ */
+function getApiKey(): string {
+  return process.env.AI_API_KEY || process.env.OPENROUTER_API_KEY || "";
 }
 
 /**
  * Get the model name from environment
  */
 function getModelName(): string {
-  return process.env.OLLAMA_MODEL || "glm5:cloud";
+  return process.env.AI_MODEL || process.env.OLLAMA_MODEL || "meta-llama/llama-3.2-3b-instruct";
 }
 
 /**
- * Send a prompt to Ollama and get a response
+ * Send a prompt to cloud AI API and get a response
+ * Supports OpenRouter, Together AI, Groq, and compatible APIs
  */
 export async function queryOllama(prompt: string): Promise<string> {
-  const url = `${getOllamaUrl()}/api/generate`;
+  const url = getApiUrl();
+  const apiKey = getApiKey();
+  const model = getModelName();
 
-  const request: OllamaRequest = {
-    model: getModelName(),
-    prompt,
+  // Check if API key is configured
+  if (!apiKey) {
+    console.warn("No AI API key configured. Returning fallback response.");
+    return "AI is not configured. Please set AI_API_KEY or OPENROUTER_API_KEY in environment variables.";
+  }
+
+  const request: CloudAIRequest = {
+    model,
+    messages: [
+      {
+        role: "system",
+        content: "You are an AI assistant helping a user manage their emails. Be concise and helpful. You have access to email metadata but not actual email content for privacy reasons."
+      },
+      { role: "user", content: prompt }
+    ],
     stream: false,
+    temperature: 0.7,
   };
 
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+      ...(url.includes("openrouter") ? {
+        "HTTP-Referer": "https://email-management-app-production.up.railway.app",
+        "X-Title": "Email Management App"
+      } : {}),
     },
     body: JSON.stringify(request),
   });
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Ollama API error: ${response.status} - ${error}`);
+    throw new Error(`AI API error: ${response.status} - ${error}`);
   }
 
-  const data: OllamaResponse = await response.json();
+  const data: CloudAIResponse = await response.json();
 
-  return data.response;
+  // Handle different response formats
+  if (data.choices?.[0]?.message?.content) {
+    return data.choices[0].message.content;
+  }
+  if (data.message?.content) {
+    return data.message.content;
+  }
+  if (data.response) {
+    return data.response;
+  }
+
+  throw new Error("Unexpected response format from AI API");
 }
 
 /**
