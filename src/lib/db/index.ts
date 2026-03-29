@@ -7,8 +7,8 @@ const globalForDb = globalThis as unknown as {
   client: ReturnType<typeof postgres> | undefined;
 };
 
-// Use DATABASE_URL (internal) for Railway container connections
-const databaseUrl = process.env.DATABASE_URL || process.env.DATABASE_PUBLIC_URL;
+// Use DATABASE_PUBLIC_URL (external) first for Railway, fall back to DATABASE_URL (internal)
+const databaseUrl = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
 
 let dbInstance: PostgresJsDatabase<typeof schema> | null = null;
 let clientInstance: ReturnType<typeof postgres> | null = null;
