@@ -10,18 +10,21 @@ node setup-env.js
 
 This creates a `.env` file with secure random keys.
 
-### 2. Set Up Supabase Database
+### 2. Set Up Database
 
-1. Go to https://supabase.com and create a free project
-2. Go to **Project Settings** → **Database**
-3. Under **Connection string**, copy the **URI** connection string (Pooler mode)
-4. Get the database password from **Project Settings** → **Database** → **Database password**
-5. In your `.env` file, set:
-   ```
-   DATABASE_URL=postgresql://postgres.[project-ref]:[PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true
-   ```
+**Option A: Local PostgreSQL**
+```bash
+# Install PostgreSQL locally, then set:
+DATABASE_URL=postgresql://localhost:5432/email-management
+```
 
-   Replace `[PASSWORD]` and `[project-ref]` with your actual values.
+**Option B: Railway PostgreSQL (Recommended for Production)**
+1. Create a Railway project and add a PostgreSQL database
+2. Copy the connection string from Railway dashboard
+3. Set in `.env`:
+   ```
+   DATABASE_URL=postgresql://...
+   ```
 
 ### 3. Install Dependencies
 
@@ -70,7 +73,7 @@ Open http://localhost:3000
 ### Microsoft OAuth (Outlook/Hotmail)
 
 1. Go to https://portal.azure.com/
-2. App registrations → New registration
+2. App Registrations → New registration
 3. Supported account types: **Personal Microsoft accounts**
 4. Add redirect URI:
    ```
@@ -120,8 +123,10 @@ MICROSOFT_CLIENT_ID=...
 MICROSOFT_CLIENT_SECRET=...
 NEXT_PUBLIC_MICROSOFT_CLIENT_ID=...
 
-# Optional - AI features (requires self-hosted Ollama)
-OLLAMA_API_URL=
+# AI features (Groq API recommended)
+AI_API_URL=https://api.groq.com/openai/v1/chat/completions
+AI_API_KEY=your-groq-api-key
+AI_MODEL=llama3-8b-8192
 ```
 
 ### 4. Update OAuth Redirect URIs
@@ -140,10 +145,11 @@ Railway auto-deploys on push. Your app should be live!
 
 ### "DATABASE_URL must be set"
 - Make sure you ran `node setup-env.js`
-- Set your Supabase connection string
+- Set your database connection string
 
 ### "relation does not exist"
 - Run `npm run db:push` to create tables
+- Or visit `/api/migrate` while logged in
 
 ### OAuth "redirect_uri_mismatch"
 - Check that your redirect URI in Google/Microsoft console matches your `NEXTAUTH_URL`
@@ -151,6 +157,5 @@ Railway auto-deploys on push. Your app should be live!
 - For Railway: `https://your-app.railway.app/api/accounts/callback/...`
 
 ### AI Chat not working
-- AI features require Ollama running locally or a hosted endpoint
-- Default model is `llama3.2` - install with `ollama pull llama3.2`
-- Or set `OLLAMA_API_URL` to your endpoint
+- Set `AI_API_KEY` with a Groq API key (free at https://groq.com)
+- Default model is `llama3-8b-8192`

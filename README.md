@@ -6,11 +6,13 @@ A secure web application for managing multiple email accounts, with AI-powered s
 
 - **Multi-Account Support**: Connect Gmail, Outlook/Hotmail, and AOL accounts
 - **Cross-Account Search**: Search across all your emails from one interface
-- **AI-Powered Assistant**: Use natural language to find and manage emails (Ollama)
+- **AI-Powered Assistant**: Use natural language to find and manage emails (Groq API)
 - **Bulk Spam Cleanup**: Delete or archive multiple emails at once
+- **Bulk Unsubscribe**: Detect and unsubscribe from newsletters and marketing emails
 - **Cleanup Rules**: Create automatic rules to process incoming emails
 - **Account Groups**: Organize accounts into groups for easier searching
 - **Undo Queue**: Restore deleted emails within 24 hours
+- **Chat History**: AI conversations persist across sessions
 
 ## Quick Start
 
@@ -23,7 +25,7 @@ node setup-env.js
 # Install dependencies
 npm install
 
-# Set DATABASE_URL in .env (Supabase or local PostgreSQL)
+# Set DATABASE_URL in .env (Railway PostgreSQL or local)
 
 # Push database schema
 npm run db:push
@@ -38,7 +40,7 @@ npm run dev
 - **Backend**: Next.js API Routes
 - **Database**: PostgreSQL with Drizzle ORM
 - **Authentication**: Password-protected single-user access (NextAuth)
-- **AI**: Ollama with llama3.2
+- **AI**: Groq API with Llama 3 models
 
 ## Scripts
 

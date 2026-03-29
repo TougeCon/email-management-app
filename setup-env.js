@@ -24,11 +24,12 @@ MICROSOFT_CLIENT_ID=
 MICROSOFT_CLIENT_SECRET=
 NEXT_PUBLIC_MICROSOFT_CLIENT_ID=
 
-# Ollama AI Integration
-OLLAMA_API_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
+# Groq AI Integration (https://console.groq.com)
+AI_API_URL=https://api.groq.com/openai/v1/chat/completions
+AI_API_KEY=
+AI_MODEL=llama3-8b-8192
 
-# Database
+# Database (Railway PostgreSQL or local)
 DATABASE_URL=
 
 # App URL (change for production)
@@ -42,7 +43,8 @@ console.log('Created .env file with:');
 console.log(`  - ENCRYPTION_KEY: ${generateHex(32).substring(0, 16)}...`);
 console.log(`  - NEXTAUTH_SECRET: ${generateHex(32).substring(0, 16)}...`);
 console.log('\nNext steps:');
-console.log('1. Set DATABASE_URL to your Supabase connection string');
-console.log('2. Add your OAuth credentials (or use localhost:3000 for testing without OAuth)');
-console.log('3. Run: npm run db:push');
-console.log('4. Run: npm run dev');
+console.log('1. Set DATABASE_URL to your PostgreSQL connection string (Railway or local)');
+console.log('2. Add your OAuth credentials for Gmail/Outlook');
+console.log('3. Set AI_API_KEY from https://console.groq.com for AI features');
+console.log('4. Run: npm run db:push');
+console.log('5. Run: npm run dev');
