@@ -77,29 +77,16 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // First, get the CSRF token
-      const csrfRes = await fetch("/api/auth/csrf");
-      const csrfData = await csrfRes.json();
-      const csrfToken = csrfData.csrfToken;
-
-      // Submit the form with CSRF token
-      const res = await fetch("/api/auth/callback/credentials", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          csrfToken,
-          password,
-          redirect: "false",
-        }),
+      const result = await signIn("credentials", {
+        password,
+        redirect: false,
       });
 
-      if (res.ok) {
+      if (result?.error) {
+        setError("Invalid password");
+      } else {
         router.push("/dashboard");
         router.refresh();
-      } else {
-        setError("Invalid password");
       }
     } catch {
       setError("An error occurred. Please try again.");
