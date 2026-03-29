@@ -80,7 +80,13 @@ ${conversationHistory.map((m: { role: string; content: string }) => `${m.role}: 
 
 User: ${message}
 
-Please provide a helpful response. If they're asking about emails, summarize what you know from the metadata. If they want to take action (like delete or archive), suggest what they might want to do. Be concise and helpful.
+Please provide a helpful response. Follow these guidelines:
+1. If asked about counts or statistics, provide specific numbers from the metadata
+2. If asked to find emails, suggest search terms and filters they can use
+3. If asked for cleanup suggestions, identify potential spam/newsletter patterns
+4. If asked for actions, provide step-by-step guidance
+5. Be concise but informative - use bullet points when listing items
+6. Always mention specific sender emails or patterns when relevant
 
 Response:`;
 

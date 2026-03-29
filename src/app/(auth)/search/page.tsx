@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Search, Mail, RefreshCw } from "lucide-react";
+import { Search, Mail, RefreshCw, Sparkles } from "lucide-react";
 
 interface EmailResult {
   id: string;
@@ -52,6 +52,33 @@ export default function SearchPage() {
       setSelectedAccounts((data.accounts || []).map((a: Account) => a.id));
     } catch (error) {
       console.error("Error fetching accounts:", error);
+    }
+  };
+
+  const handleAiSearch = async () => {
+    if (!searchQuery.trim()) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/ai/parse-query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: searchQuery }),
+      });
+      const data = await res.json();
+
+      if (data.parsed) {
+        if (data.parsed.sender) setSenderFilter(data.parsed.sender);
+        if (data.parsed.query) setSearchQuery(data.parsed.query);
+        toast({
+          title: "AI Search Parsed",
+          description: `Search refined: ${data.parsed.query || "all emails"} ${data.parsed.sender ? `from ${data.parsed.sender}` : ""}`,
+        });
+      }
+    } catch (error) {
+      console.error("AI parse error:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -161,7 +188,22 @@ export default function SearchPage() {
       {/* Search Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Search Filters</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Search Filters</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAiSearch}
+              disabled={!searchQuery.trim() || loading}
+              className="gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              AI Parse
+            </Button>
+          </div>
+          <CardDescription>
+            Use natural language and click "AI Parse" to extract search terms
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
@@ -169,7 +211,7 @@ export default function SearchPage() {
               <Label htmlFor="search-query">Search Query</Label>
               <Input
                 id="search-query"
-                placeholder="Search in subject, sender, or content..."
+                placeholder="e.g., newsletter from last week..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -178,25 +220,36 @@ export default function SearchPage() {
               <Label htmlFor="sender-filter">Sender Email</Label>
               <Input
                 id="sender-filter"
-                placeholder="Filter by sender email..."
+                placeholder="e.g., sender@example.com"
                 value={senderFilter}
                 onChange={(e) => setSenderFilter(e.target.value)}
               />
             </div>
           </div>
-          <Button className="mt-4" onClick={() => handleSearch(0)} disabled={loading}>
-            {loading ? (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Searching...
-              </>
-            ) : (
-              <>
-                <Search className="mr-2 h-4 w-4" />
-                Search
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2 mt-4">
+            <Button onClick={() => handleSearch(0)} disabled={loading}>
+              {loading ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="mr-2 h-4 w-4" />
+                  Search
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearchQuery("");
+                setSenderFilter("");
+              }}
+            >
+              Clear
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

@@ -98,6 +98,15 @@ export default function AIChatPage() {
     "Find emails from PayPal",
     "What senders email me most often?",
     "Suggest emails I might want to delete",
+    "Show me unread emails from this week",
+    "Which emails should I archive?",
+  ];
+
+  const quickActions = [
+    { label: "Find spam", query: "Find emails that look like spam" },
+    { label: "Newsletters", query: "Find all newsletter emails" },
+    { label: "Unread", query: "Show me important unread emails" },
+    { label: "Old emails", query: "Find emails older than 30 days" },
   ];
 
   return (
@@ -160,6 +169,23 @@ export default function AIChatPage() {
           <Send className="h-4 w-4 mr-2" />
           Send
         </Button>
+      </div>
+
+      {/* Quick Actions */}
+      <div>
+        <p className="text-sm text-muted-foreground mb-2">Quick actions:</p>
+        <div className="flex flex-wrap gap-2">
+          {quickActions.map((action) => (
+            <Button
+              key={action.label}
+              variant="secondary"
+              size="sm"
+              onClick={() => setInput(action.query)}
+            >
+              {action.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {/* Example Queries */}
