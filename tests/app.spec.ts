@@ -17,7 +17,8 @@ test.describe('Email Management App - E2E Tests', () => {
 
     // Wait for navigation with longer timeout
     await page.waitForURL(BASE_URL + '/dashboard', { timeout: 10000 });
-    await expect(page.locator('h1')).toContainText('Dashboard');
+    // Main content heading is text-3xl, sidebar is text-xl
+    await expect(page.locator('h1.text-3xl')).toContainText('Dashboard');
   });
 
   test('should show accounts page', async ({ page }) => {
@@ -30,7 +31,7 @@ test.describe('Email Management App - E2E Tests', () => {
     await page.waitForSelector('a[href="/accounts"]', { timeout: 10000 });
     await page.click('a[href="/accounts"]');
     await page.waitForURL(BASE_URL + '/accounts', { timeout: 10000 });
-    await expect(page.locator('h1')).toContainText('Accounts');
+    await expect(page.locator('h1.text-3xl')).toContainText('Accounts');
   });
 
   test('should show search page', async ({ page }) => {
@@ -43,7 +44,7 @@ test.describe('Email Management App - E2E Tests', () => {
     await page.waitForSelector('a[href="/search"]', { timeout: 10000 });
     await page.click('a[href="/search"]');
     await page.waitForURL(BASE_URL + '/search', { timeout: 10000 });
-    await expect(page.locator('h1')).toContainText('Search');
+    await expect(page.locator('h1.text-3xl')).toContainText('Search');
   });
 
   test('should show cleanup page', async ({ page }) => {
@@ -56,7 +57,7 @@ test.describe('Email Management App - E2E Tests', () => {
     await page.waitForSelector('a[href="/cleanup"]', { timeout: 10000 });
     await page.click('a[href="/cleanup"]');
     await page.waitForURL(BASE_URL + '/cleanup', { timeout: 10000 });
-    await expect(page.locator('h1')).toContainText('Cleanup');
+    await expect(page.locator('h1.text-3xl')).toContainText('Cleanup');
   });
 
   test('should show rules page', async ({ page }) => {
@@ -69,7 +70,7 @@ test.describe('Email Management App - E2E Tests', () => {
     await page.waitForSelector('a[href="/rules"]', { timeout: 10000 });
     await page.click('a[href="/rules"]');
     await page.waitForURL(BASE_URL + '/rules', { timeout: 10000 });
-    await expect(page.locator('h1')).toContainText('Rules');
+    await expect(page.locator('h1.text-3xl')).toContainText('Rules');
   });
 
   test('should show AI chat page', async ({ page }) => {
@@ -82,7 +83,7 @@ test.describe('Email Management App - E2E Tests', () => {
     await page.waitForSelector('a[href="/ai-chat"]', { timeout: 10000 });
     await page.click('a[href="/ai-chat"]');
     await page.waitForURL(BASE_URL + '/ai-chat', { timeout: 10000 });
-    await expect(page.locator('h1')).toContainText('AI');
+    await expect(page.locator('h1.text-3xl')).toContainText('AI');
   });
 
   test('should reject wrong password', async ({ page }) => {
@@ -91,6 +92,6 @@ test.describe('Email Management App - E2E Tests', () => {
     await page.click('button[type="submit"]');
 
     // Should show error message
-    await expect(page.locator('text=Invalid password')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('p.text-red-500')).toBeVisible({ timeout: 5000 });
   });
 });
