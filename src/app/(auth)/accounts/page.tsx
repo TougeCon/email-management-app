@@ -86,7 +86,6 @@ export default function AccountsPage() {
   };
 
   const handleConnectGmail = () => {
-    const { getGmailAuthUrl } = require("@/lib/email-providers/gmail");
     // Redirect to Gmail OAuth
     const redirectUri = `${window.location.origin}/api/accounts/callback/gmail`;
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;

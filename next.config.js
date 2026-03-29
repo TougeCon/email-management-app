@@ -4,6 +4,7 @@ const nextConfig = {
   images: {
     domains: ['lh3.googleusercontent.com', 'graph.microsoft.com'],
   },
+  serverRuntime: 'nodejs',
   async headers() {
     return [
       {

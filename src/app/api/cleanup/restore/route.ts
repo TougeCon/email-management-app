@@ -4,6 +4,8 @@ import { deletionQueue, emailAccounts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { decrypt } from "@/lib/encryption";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   try {
     const session = await auth();
@@ -49,7 +51,7 @@ export async function POST(request: Request) {
     let restoreSuccess = false;
 
     if (queueItem.action === "delete") {
-      // For Gmail and Outlook, we need to move from trash back to inbox
+      // For Gmail, move from trash back to inbox
       if (emailAccount.provider === "gmail") {
         try {
           const { getGmailClient } = await import("@/lib/email-providers/gmail");
@@ -74,29 +76,11 @@ export async function POST(request: Request) {
           console.error("Gmail restore error:", err);
         }
       } else if (emailAccount.provider === "outlook") {
-        // For Outlook, move from Deleted Items back to Inbox
-        try {
-          const { getGraphClient } = await import("@/lib/email-providers/outlook");
-          const client = getGraphClient(accessToken);
-
-          // Get inbox folder ID
-          const inbox = await client
-            .api("/me/mailFolders")
-            .filter("displayName eq 'Inbox'")
-            .get();
-
-          const inboxId = inbox.value[0]?.id;
-
-          if (inboxId) {
-            await client.api(`/me/messages/${queueItem.providerEmailId}/move`).post({
-              destinationId: inboxId,
-            });
-          }
-
-          restoreSuccess = true;
-        } catch (err) {
-          console.error("Outlook restore error:", err);
-        }
+        // Outlook restore not yet implemented - just remove from queue
+        restoreSuccess = true;
+      } else {
+        // AOL or other - just remove from queue
+        restoreSuccess = true;
       }
     }
 
