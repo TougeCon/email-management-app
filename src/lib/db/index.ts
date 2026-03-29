@@ -10,35 +10,40 @@ const globalForDb = globalThis as unknown as {
 // Use DATABASE_URL (internal) for Railway container connections
 const databaseUrl = process.env.DATABASE_URL || process.env.DATABASE_PUBLIC_URL;
 
-function createClient() {
+let dbInstance: PostgresJsDatabase<typeof schema> | null = null;
+let clientInstance: ReturnType<typeof postgres> | null = null;
+
+function initializeDb() {
   if (!databaseUrl) {
     throw new Error("DATABASE_URL or DATABASE_PUBLIC_URL must be set");
   }
-  return postgres(databaseUrl, {
-    prepare: false,
-    ssl: "require",
-    max: 1,
-    idle_timeout: 20,
-    connect_timeout: 10,
-  });
-}
 
-// Get or create the database connection
-function getDb(): PostgresJsDatabase<typeof schema> {
-  if (!globalForDb.db) {
-    const client = globalForDb.client ?? createClient();
-    globalForDb.client = client;
-    globalForDb.db = drizzle(client, { schema });
+  if (!dbInstance) {
+    clientInstance = globalForDb.client ?? postgres(databaseUrl, {
+      prepare: false,
+      ssl: "require",
+      max: 1,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
+
+    dbInstance = drizzle(clientInstance, { schema });
+
+    if (process.env.NODE_ENV !== "production") {
+      globalForDb.db = dbInstance;
+      globalForDb.client = clientInstance;
+    }
   }
-  return globalForDb.db;
+
+  return dbInstance;
 }
 
-// Export as db for backward compatibility
-// This will throw if used before db is initialized
+// Export db that initializes on first property access
 export const db = new Proxy({} as PostgresJsDatabase<typeof schema>, {
-  get(_, prop) {
-    const actualDb = getDb();
-    return (actualDb as Record<string, unknown>)[prop as string];
+  get(_target, prop) {
+    const db = initializeDb();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (db as any)[prop];
   },
 });
 
