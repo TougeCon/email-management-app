@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Plus, Trash2, RefreshCw, Undo } from "lucide-react";
+import { Plus, Trash2, RefreshCw } from "lucide-react";
 
 interface Rule {
   id: string;
@@ -19,21 +19,10 @@ interface Rule {
   isActive: boolean;
 }
 
-interface DeletionQueueItem {
-  id: string;
-  accountId: string;
-  accountEmail: string;
-  providerEmailId: string;
-  subject: string | null;
-  sender: string | null;
-  deletedAt: string;
-  restoreBefore: string;
-}
 
 export default function RulesPage() {
   const { toast } = useToast();
   const [rules, setRules] = useState<Rule[]>([]);
-  const [deletionQueue, setDeletionQueue] = useState<DeletionQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // New rule form
@@ -52,16 +41,10 @@ export default function RulesPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [rulesRes, queueRes] = await Promise.all([
-        fetch("/api/rules"),
-        fetch("/api/cleanup/queue"),
-      ]);
-
+      const rulesRes = await fetch("/api/rules");
       const rulesData = await rulesRes.json();
-      const queueData = await queueRes.json();
 
       setRules(rulesData.rules || []);
-      setDeletionQueue(queueData.queue || []);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -205,34 +188,6 @@ export default function RulesPage() {
       toast({
         title: "Error",
         description: "Failed to update rule",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleRestore = async (itemId: string) => {
-    try {
-      const res = await fetch("/api/cleanup/restore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId }),
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        toast({
-          title: "Email restored",
-          description: "The email has been restored to your inbox.",
-        });
-        fetchData();
-      } else {
-        throw new Error(data.error);
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to restore email",
         variant: "destructive",
       });
     }
@@ -394,49 +349,6 @@ export default function RulesPage() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Deletion Queue */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Deletion Queue</CardTitle>
-          <CardDescription>
-            Emails deleted in the last 24 hours. Restore before they&apos;re permanently
-            deleted.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p>Loading...</p>
-          ) : deletionQueue.length === 0 ? (
-            <p className="text-muted-foreground">
-              No emails in the deletion queue.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {deletionQueue.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between rounded-lg border p-4"
-                >
-                  <div>
-                    <p className="font-medium">{item.subject || "(No subject)"}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {item.sender} • Deleted {new Date(item.deletedAt).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-yellow-600">
-                      Restore before {new Date(item.restoreBefore).toLocaleString()}
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => handleRestore(item.id)}>
-                    <Undo className="mr-2 h-4 w-4" />
-                    Restore
-                  </Button>
                 </div>
               ))}
             </div>

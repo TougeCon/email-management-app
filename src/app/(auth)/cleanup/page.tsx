@@ -38,6 +38,17 @@ interface CleanupRule {
   isActive: boolean;
 }
 
+interface DeletionQueueItem {
+  id: string;
+  accountId: string;
+  accountEmail: string;
+  providerEmailId: string;
+  subject: string | null;
+  sender: string | null;
+  deletedAt: string;
+  restoreBefore: string;
+}
+
 export default function CleanupPage() {
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -49,10 +60,12 @@ export default function CleanupPage() {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [rules, setRules] = useState<CleanupRule[]>([]);
+  const [deletionQueue, setDeletionQueue] = useState<DeletionQueueItem[]>([]);
 
   useEffect(() => {
     fetchAccounts();
     fetchRules();
+    fetchDeletionQueue();
   }, []);
 
   const toggleAccount = (accountId: string) => {
@@ -88,6 +101,82 @@ export default function CleanupPage() {
       setRules(data.rules || []);
     } catch (error) {
       console.error("Error fetching rules:", error);
+    }
+  };
+
+  const fetchDeletionQueue = async () => {
+    try {
+      const res = await fetch("/api/cleanup/queue");
+      const data = await res.json();
+      setDeletionQueue(data.queue || []);
+    } catch (error) {
+      console.error("Error fetching deletion queue:", error);
+    }
+  };
+
+  const handleRestoreAll = async () => {
+    if (deletionQueue.length === 0) {
+      toast({
+        title: "Nothing to restore",
+        description: "No emails in the deletion queue",
+      });
+      return;
+    }
+
+    if (!confirm(`Restore all ${deletionQueue.length} deleted emails? This will move them back to your inbox.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/cleanup/restore-all", {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        toast({
+          title: "Emails restored",
+          description: `${data.restoredCount} emails restored to inbox`,
+        });
+        setDeletionQueue([]);
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to restore emails",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRestore = async (itemId: string) => {
+    try {
+      const res = await fetch("/api/cleanup/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        toast({
+          title: "Email restored",
+          description: "The email has been restored to your inbox.",
+        });
+        fetchDeletionQueue();
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to restore email",
+        variant: "destructive",
+      });
     }
   };
 
@@ -427,6 +516,64 @@ export default function CleanupPage() {
         </CardContent>
       </Card>
 
+      {/* Deletion Queue */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Deletion Queue</CardTitle>
+              <CardDescription>
+                {deletionQueue.length} email(s) deleted in the last 24 hours. Restore before permanent deletion.
+              </CardDescription>
+            </div>
+            {deletionQueue.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRestoreAll}
+              >
+                Restore All
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {deletionQueue.length === 0 ? (
+            <p className="text-muted-foreground text-center py-4">
+              No emails in the deletion queue
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {deletionQueue.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-lg border p-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">
+                      {item.subject || "(No subject)"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {item.sender} • Deleted {new Date(item.deletedAt).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-yellow-600">
+                      Restore before {new Date(item.restoreBefore).toLocaleString()}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRestore(item.id)}
+                  >
+                    Restore
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Warning */}
       <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-900/10">
         <CardContent className="pt-6">
@@ -434,12 +581,11 @@ export default function CleanupPage() {
             <AlertTriangle className="h-5 w-5 text-yellow-600" />
             <div>
               <p className="font-medium text-yellow-800 dark:text-yellow-200">
-                Deletion Queue
+                Important
               </p>
               <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                Deleted emails are stored in a deletion queue for 24 hours. You can
-                restore them from the Rules page during this time. After 24 hours,
-                emails are permanently deleted.
+                Deleted emails are stored in the deletion queue for 24 hours. After this time,
+                they are permanently deleted and cannot be recovered.
               </p>
             </div>
           </div>

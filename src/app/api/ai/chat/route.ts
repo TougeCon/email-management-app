@@ -81,12 +81,20 @@ export async function POST(request: Request) {
       },
     };
 
+    // Get list of user's own email addresses (to exclude from spam/delete suggestions)
+    const userOwnEmails = accounts.map((a) => a.emailAddress.toLowerCase());
+
     // Build the prompt with context and action capabilities
     const contextStr = buildEmailContext(context);
 
     const fullPrompt = `You are an AI assistant helping a user manage their emails. You have access to metadata about their emails.
 
 ${contextStr}
+
+IMPORTANT: The user's own email addresses are: ${userOwnEmails.join(", ")}
+- NEVER suggest deleting, marking as spam, or archiving emails FROM the user's own email address
+- Emails from the user to themselves are sent items/replies and are IMPORTANT
+- When identifying spam or newsletters, EXCLUDE any sender that matches the user's own email addresses
 
 Previous conversation:
 ${conversationHistory.map((m: { role: string; content: string }) => `${m.role}: ${m.content}`).join("\n")}
@@ -103,10 +111,11 @@ The frontend will detect ACTION: commands and execute them automatically.
 Please provide a helpful response. Follow these guidelines:
 1. If asked about counts or statistics, provide specific numbers from the metadata
 2. If asked to find emails, suggest search terms and filters they can use
-3. If asked for cleanup suggestions, identify potential spam/newsletter patterns
+3. If asked for cleanup suggestions, identify potential spam/newsletter patterns BUT EXCLUDE the user's own email addresses
 4. For actions, use the ACTION: format above
 5. Be concise but informative - use bullet points when listing items
 6. Always mention specific sender emails or patterns when relevant
+7. CRITICAL: Never suggest actions on emails from the user's own addresses - these are important sent items
 
 Response:`;
 
