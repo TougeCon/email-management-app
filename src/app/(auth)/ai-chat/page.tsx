@@ -114,10 +114,19 @@ export default function AIChatPage() {
   }, [messages]);
 
   const executeAction = async (action: string, criteria: string) => {
-    const senderMatch = criteria.match(/from\s+([^\s]+)/i);
-    const senderEmail = senderMatch ? senderMatch[1] : null;
+    // Try to extract sender email(s) - supports multiple patterns
+    const senderMatches = criteria.match(/from\s+([^\s,]+)/gi);
+    const senderEmails = senderMatches?.map(m => m.replace(/from\s+/i, '').trim()) || [];
+    const senderEmail = senderEmails[0] || null;
+
     const subjectMatch = criteria.match(/subject[:\s]+([^\s]+)/i);
     const subject = subjectMatch ? subjectMatch[1] : null;
+
+    // Also try to extract a "containing" pattern for body/subject keywords
+    const containingMatch = criteria.match(/containing\s+(?:the\s+word\s+)?['"]?([^'"]+)['"]?/i);
+    const keyword = containingMatch ? containingMatch[1] : null;
+
+    console.log("Executing action:", { action, senderEmail, subject, keyword, senderEmails });
 
     try {
       const res = await fetch("/api/ai/action", {
@@ -126,7 +135,9 @@ export default function AIChatPage() {
         body: JSON.stringify({
           action,
           senderEmail,
+          senderEmails: senderEmails.length > 1 ? senderEmails : undefined,
           subject,
+          keyword,
           accountIds: selectedAccounts,
         }),
       });
@@ -140,6 +151,7 @@ export default function AIChatPage() {
         });
         return `Done! I've ${action.replace("_", " ")} ${data.processedCount} email(s).`;
       } else {
+        console.error("Action failed:", data);
         return `Failed: ${data.error || "Unknown error"}`;
       }
     } catch (error) {

@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { action, senderEmail, subject, accountIds = [] } = body;
+    const { action, senderEmail, senderEmails, subject, keyword, accountIds = [] } = body;
 
     if (!action || !["delete", "mark_spam", "archive"].includes(action)) {
       return Response.json({ error: "Invalid action" }, { status: 400 });
@@ -22,12 +22,27 @@ export async function POST(request: Request) {
     // Build conditions to find matching emails
     const conditions = [];
 
+    // Support single sender or multiple senders
     if (senderEmail) {
       conditions.push(ilike(emailCache.senderEmail, `%${senderEmail}%`));
     }
 
+    if (senderEmails && senderEmails.length > 1) {
+      const senderConditions = senderEmails.map((email: string) =>
+        ilike(emailCache.senderEmail, `%${email}%`)
+      );
+      // Use OR for multiple senders
+      const orModule = await import("drizzle-orm");
+      conditions.push(orModule.or(...senderConditions));
+    }
+
     if (subject) {
       conditions.push(ilike(emailCache.subject, `%${subject}%`));
+    }
+
+    if (keyword) {
+      // Search in bodyPreview for keyword matches
+      conditions.push(ilike(emailCache.bodyPreview, `%${keyword}%`));
     }
 
     if (accountIds.length > 0) {
@@ -38,7 +53,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "No search criteria provided" }, { status: 400 });
     }
 
-    // Find matching emails (limit to prevent accidental mass operations)
+    // Find matching emails (increased limit for bulk operations)
     const emails = await db
       .select({
         id: emailCache.id,
@@ -46,10 +61,11 @@ export async function POST(request: Request) {
         providerEmailId: emailCache.providerEmailId,
         subject: emailCache.subject,
         sender: emailCache.sender,
+        senderEmail: emailCache.senderEmail,
       })
       .from(emailCache)
       .where(and(...conditions))
-      .limit(100);
+      .limit(1000);
 
     if (emails.length === 0) {
       return Response.json({ error: "No matching emails found" }, { status: 404 });
