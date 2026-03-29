@@ -1,16 +1,22 @@
-import { drizzle } from "drizzle-orm/postgres-js";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not set");
+const globalForDb = globalThis as unknown as {
+  db: PostgresJsDatabase<typeof schema> | undefined;
+};
+
+export const db =
+  globalForDb.db ??
+  drizzle(
+    postgres(process.env.DATABASE_URL || "postgresql://placeholder:placeholder@localhost:5432/placeholder", {
+      prepare: false,
+    }),
+    { schema }
+  );
+
+if (process.env.NODE_ENV !== "production") {
+  globalForDb.db = db;
 }
-
-const connectionString = process.env.DATABASE_URL;
-
-// Disable prefetch as it's not supported by Postgres.js
-const client = postgres(connectionString, { prepare: false });
-
-export const db = drizzle(client, { schema });
 
 export type Database = typeof db;
