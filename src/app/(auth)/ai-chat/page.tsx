@@ -114,7 +114,7 @@ export default function AIChatPage() {
   }, [messages]);
 
   const executeAction = async (action: string, criteria: string) => {
-    // Try to extract sender email(s) - supports multiple patterns
+    // First, count how many emails would be affected
     const senderMatches = criteria.match(/from\s+([^\s,]+)/gi);
     const senderEmails = senderMatches?.map(m => m.replace(/from\s+/i, '').trim()) || [];
     const senderEmail = senderEmails[0] || null;
@@ -122,13 +122,41 @@ export default function AIChatPage() {
     const subjectMatch = criteria.match(/subject[:\s]+([^\s]+)/i);
     const subject = subjectMatch ? subjectMatch[1] : null;
 
-    // Also try to extract a "containing" pattern for body/subject keywords
     const containingMatch = criteria.match(/containing\s+(?:the\s+word\s+)?['"]?([^'"]+)['"]?/i);
     const keyword = containingMatch ? containingMatch[1] : null;
 
-    console.log("Executing action:", { action, senderEmail, subject, keyword, senderEmails });
-
+    // Preview: count matching emails first
     try {
+      const previewRes = await fetch("/api/ai/action/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          senderEmail,
+          senderEmails: senderEmails.length > 1 ? senderEmails : undefined,
+          subject,
+          keyword,
+          accountIds: selectedAccounts,
+        }),
+      });
+
+      const previewData = await previewRes.json();
+
+      if (previewData.count === 0) {
+        return `No emails match that criteria.`;
+      }
+
+      // Ask for confirmation if more than 10 emails
+      if (previewData.count > 10) {
+        const confirmed = confirm(
+          `This will ${action.replace("_", " ")} ${previewData.count} emails. Are you sure you want to proceed?`
+        );
+        if (!confirmed) {
+          return `Cancelled. No emails were ${action.replace("_", "ed")}.`;
+        }
+      }
+
+      // Execute the action
       const res = await fetch("/api/ai/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

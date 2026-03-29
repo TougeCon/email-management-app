@@ -11,6 +11,7 @@ import {
   MessageSquare,
   LogOut,
   LayoutDashboard,
+  UserX,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -20,6 +21,7 @@ const navItems = [
   { href: "/accounts", label: "Accounts", icon: Mail },
   { href: "/search", label: "Search", icon: Search },
   { href: "/cleanup", label: "Cleanup", icon: Trash2 },
+  { href: "/unsubscribe", label: "Unsubscribe", icon: UserX },
   { href: "/rules", label: "Rules", icon: Settings },
   { href: "/ai-chat", label: "AI Chat", icon: MessageSquare },
 ];

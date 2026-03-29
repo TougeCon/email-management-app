@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "No search criteria provided" }, { status: 400 });
     }
 
-    // Find matching emails (increased limit for bulk operations)
+    // Find matching emails (high limit for bulk operations - up to 20000)
     const emails = await db
       .select({
         id: emailCache.id,
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       })
       .from(emailCache)
       .where(and(...conditions))
-      .limit(1000);
+      .limit(20000);
 
     if (emails.length === 0) {
       return Response.json({ error: "No matching emails found" }, { status: 404 });
