@@ -110,8 +110,8 @@ export default function AIChatPage() {
   ];
 
   return (
-    <div className="space-y-6 h-[calc(100vh-200px)] flex flex-col">
-      <div>
+    <div className="h-[calc(100vh-100px)] flex flex-col">
+      <div className="mb-4">
         <h1 className="text-3xl font-bold">AI Chat</h1>
         <p className="text-muted-foreground">
           Ask questions about your emails in natural language
@@ -119,7 +119,7 @@ export default function AIChatPage() {
       </div>
 
       {/* Messages */}
-      <Card className="flex-1 overflow-hidden flex flex-col">
+      <Card className="flex-1 overflow-hidden flex flex-col mb-4">
         <CardContent className="flex-1 overflow-y-auto p-4">
           <div className="space-y-4">
             {messages.map((message, i) => (
@@ -155,6 +155,21 @@ export default function AIChatPage() {
         </CardContent>
       </Card>
 
+      {/* Quick Actions - compact row above input */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        {quickActions.map((action) => (
+          <Button
+            key={action.label}
+            variant="outline"
+            size="sm"
+            onClick={() => setInput(action.query)}
+            disabled={loading}
+          >
+            {action.label}
+          </Button>
+        ))}
+      </div>
+
       {/* Input */}
       <div className="flex gap-2">
         <Input
@@ -169,40 +184,6 @@ export default function AIChatPage() {
           <Send className="h-4 w-4 mr-2" />
           Send
         </Button>
-      </div>
-
-      {/* Quick Actions */}
-      <div>
-        <p className="text-sm text-muted-foreground mb-2">Quick actions:</p>
-        <div className="flex flex-wrap gap-2">
-          {quickActions.map((action) => (
-            <Button
-              key={action.label}
-              variant="secondary"
-              size="sm"
-              onClick={() => setInput(action.query)}
-            >
-              {action.label}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      {/* Example Queries */}
-      <div>
-        <p className="text-sm text-muted-foreground mb-2">Try asking:</p>
-        <div className="flex flex-wrap gap-2">
-          {exampleQueries.map((query) => (
-            <Button
-              key={query}
-              variant="outline"
-              size="sm"
-              onClick={() => setInput(query)}
-            >
-              {query}
-            </Button>
-          ))}
-        </div>
       </div>
     </div>
   );

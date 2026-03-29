@@ -136,9 +136,10 @@ export function buildEmailContext(context: AIQueryContext): string {
   }
   contextStr += `\n`;
 
-  contextStr += `Recent emails:\n`;
-  for (const email of emailMetadata.recentEmails.slice(0, 5)) {
-    contextStr += `- "${email.subject}" from ${email.sender} (${email.date.toDateString()})\n`;
+  contextStr += `Recent emails (includes body previews for content search):\n`;
+  for (const email of emailMetadata.recentEmails.slice(0, 10)) {
+    const bodySnippet = email.bodyPreview ? ` [body: "${email.bodyPreview.slice(0, 80)}..."]` : "";
+    contextStr += `- "${email.subject}" from ${email.sender} <${email.senderEmail}> (${email.date.toDateString()})${bodySnippet}\n`;
   }
 
   return contextStr;

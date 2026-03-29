@@ -25,14 +25,15 @@ export async function GET(request: Request) {
       conditions.push(inArray(emailCache.accountId, accountIds));
     }
 
-    // Search in subject, sender, or snippet
+    // Search in subject, sender, snippet, or body preview
     if (query) {
       conditions.push(
         or(
           ilike(emailCache.subject, `%${query}%`),
           ilike(emailCache.sender, `%${query}%`),
           ilike(emailCache.senderEmail, `%${query}%`),
-          ilike(emailCache.snippet, `%${query}%`)
+          ilike(emailCache.snippet, `%${query}%`),
+          ilike(emailCache.bodyPreview, `%${query}%`)
         )
       );
     }

@@ -41,11 +41,13 @@ export async function POST(request: Request) {
       .select({
         subject: emailCache.subject,
         sender: emailCache.sender,
+        senderEmail: emailCache.senderEmail,
         receivedAt: emailCache.receivedAt,
+        bodyPreview: emailCache.bodyPreview,
       })
       .from(emailCache)
       .orderBy(desc(emailCache.receivedAt))
-      .limit(10);
+      .limit(20);
 
     // Build context
     const context: AIQueryContext = {

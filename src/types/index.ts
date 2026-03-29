@@ -74,7 +74,9 @@ export interface AIQueryContext {
     recentEmails: {
       subject: string;
       sender: string;
+      senderEmail: string;
       date: Date;
+      bodyPreview?: string | null;
     }[];
     accounts: {
       email: string;

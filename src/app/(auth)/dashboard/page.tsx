@@ -120,49 +120,6 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="hover:shadow-md transition-shadow cursor-pointer">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
-                <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Add Account</p>
-                <p className="text-xs text-muted-foreground">Connect Gmail, Outlook, or AOL</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="hover:shadow-md transition-shadow cursor-pointer">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-green-100 dark:bg-green-900 rounded-full">
-                <Inbox className="h-6 w-6 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Sync Emails</p>
-                <p className="text-xs text-muted-foreground">Fetch latest emails</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="hover:shadow-md transition-shadow cursor-pointer">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-full">
-                <AlertCircle className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Cleanup</p>
-                <p className="text-xs text-muted-foreground">Remove spam emails</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Accounts List */}
       <Card>
         <CardHeader>
