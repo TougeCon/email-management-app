@@ -25,48 +25,55 @@ interface OllamaChatResponse {
 }
 
 /**
- * Get the Ollama cloud API URL
- * Uses ollama.com's cloud API as per https://docs.ollama.com/api/authentication
+ * Get the AI API URL from environment
+ * Default to Groq API which works reliably from Railway
  */
-function getOllamaCloudUrl(): string {
-  return "https://ollama.com/api/generate";
+function getApiUrl(): string {
+  return process.env.AI_API_URL || "https://api.groq.com/openai/v1/chat/completions";
 }
 
 /**
  * Get the API key from environment
  */
 function getApiKey(): string {
-  return process.env.OLLAMA_CLOUD_API_KEY || process.env.OLLAMA_API_KEY || "";
+  return process.env.AI_API_KEY || process.env.GROQ_API_KEY || "";
 }
 
 /**
  * Get the model name from environment
  */
 function getModelName(): string {
-  return process.env.OLLAMA_MODEL || "llama3.2";
+  return process.env.AI_MODEL || process.env.GROQ_MODEL || "llama3-8b-8192";
 }
 
 /**
- * Send a prompt to Ollama cloud API and get a response
- * Uses ollama.com's cloud API with Bearer token authentication
+ * Send a prompt to AI API and get a response
+ * Uses Groq API by default (fast, free tier, works from Railway)
  */
 export async function queryOllama(prompt: string): Promise<string> {
-  const url = getOllamaCloudUrl();
+  const url = getApiUrl();
   const apiKey = getApiKey();
   const model = getModelName();
 
-  console.log(`[Ollama] Using model: ${model}, URL: ${url}, API key configured: ${!!apiKey}`);
+  console.log(`[AI] Using model: ${model}, URL: ${url}, API key configured: ${!!apiKey}`);
 
   // Check if API key is configured
   if (!apiKey) {
-    console.error("[Ollama] No API key configured");
-    return "AI is not configured. Please set OLLAMA_CLOUD_API_KEY in Railway environment variables.";
+    console.error("[AI] No API key configured");
+    return "AI is not configured. Please set AI_API_KEY or GROQ_API_KEY in Railway environment variables.";
   }
 
-  const request: OllamaGenerateRequest = {
+  const request = {
     model,
-    prompt: `You are an AI assistant helping a user manage their emails. Be concise and helpful.\n\nUser: ${prompt}\n\nResponse:`,
-    stream: false,
+    messages: [
+      {
+        role: "system",
+        content: "You are an AI assistant helping a user manage their emails. Be concise and helpful. You have access to email metadata but not actual email content for privacy reasons."
+      },
+      { role: "user", content: prompt }
+    ],
+    temperature: 0.7,
+    max_tokens: 1024,
   };
 
   try {
@@ -77,30 +84,30 @@ export async function queryOllama(prompt: string): Promise<string> {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify(request),
-      // Add timeout
-      signal: AbortSignal.timeout(30000), // 30 second timeout
+      signal: AbortSignal.timeout(30000),
     });
 
-    console.log(`[Ollama] Response status: ${response.status}`);
+    console.log(`[AI] Response status: ${response.status}`);
 
     if (!response.ok) {
       const error = await response.text();
-      console.error(`[Ollama] API error: ${response.status} - ${error}`);
-      throw new Error(`Ollama API error: ${response.status} - ${error}`);
+      console.error(`[AI] API error: ${response.status} - ${error}`);
+      throw new Error(`AI API error: ${response.status} - ${error}`);
     }
 
-    const data: OllamaGenerateResponse = await response.json();
-    console.log(`[Ollama] Response received, length: ${data.response?.length || 0}`);
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    console.log(`[AI] Response received, length: ${content?.length || 0}`);
 
-    return data.response;
+    return content || "No response from AI";
   } catch (error) {
     if (error instanceof Error) {
       if (error.cause && (error.cause as any).code === 'ECONNREFUSED') {
-        console.error("[Ollama] Connection refused - check network/firewall");
+        console.error("[AI] Connection refused - check network/firewall");
         return "Cannot connect to AI service. This may be a network issue.";
       }
       if (error.name === 'TimeoutError') {
-        console.error("[Ollama] Request timed out");
+        console.error("[AI] Request timed out");
         return "AI request timed out. Please try again.";
       }
     }
