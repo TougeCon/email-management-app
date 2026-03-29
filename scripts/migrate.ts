@@ -1,22 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { appConfig, emailAccounts, accountGroups, accountGroupMembers, emailCache, cleanupRules, deletionQueue, senderRules } from "@/lib/db/schema";
+import postgres from "postgres";
 
-// This endpoint should be called once to set up the database
-// Remove or secure this endpoint after initial setup
+const connectionString = "postgresql://postgres:fwCITpnSagNZAzmLRFPQdknWRASAvnsZ@gondola.proxy.rlwy.net:26343/railway";
 
-export async function POST(request: NextRequest) {
-  // Only allow in production and with a secret key
-  const authHeader = request.headers.get("authorization");
-  const setupKey = process.env.SETUP_KEY;
+const sql = postgres(connectionString, {
+  ssl: 'require',
+});
 
-  if (!setupKey || authHeader !== `Bearer ${setupKey}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+async function migrate() {
   try {
-    // Create tables using raw SQL since drizzle push doesn't work remotely
-    const sql = `
+    console.log("Creating tables...");
+
+    await sql.unsafe(`
       -- App Configuration
       CREATE TABLE IF NOT EXISTS app_config (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -104,29 +98,15 @@ export async function POST(request: NextRequest) {
       CREATE INDEX IF NOT EXISTS idx_email_cache_account_id ON email_cache(account_id);
       CREATE INDEX IF NOT EXISTS idx_email_cache_received_at ON email_cache(received_at);
       CREATE INDEX IF NOT EXISTS idx_email_cache_sender_email ON email_cache(sender_email);
-    `;
+    `);
 
-    // Execute the SQL
-    // Note: We need to use the postgres client directly for raw SQL
-    // Use DATABASE_PUBLIC_URL for Railway external connections
-    const { default: postgres } = await import("postgres");
-    const connectionString = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL!;
-    const client = postgres(connectionString, {
-      ssl: "require",
-      max: 1,
-      idle_timeout: 20,
-      connect_timeout: 10,
-    });
-
-    await client.unsafe(sql);
-    await client.end();
-
-    return NextResponse.json({ success: true, message: "Database tables created" });
+    console.log("Tables created successfully!");
   } catch (error) {
     console.error("Migration error:", error);
-    return NextResponse.json(
-      { error: "Migration failed", details: String(error) },
-      { status: 500 }
-    );
+    process.exit(1);
+  } finally {
+    await sql.end();
   }
 }
+
+migrate();

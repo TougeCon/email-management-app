@@ -9,13 +9,19 @@ const globalForDb = globalThis as unknown as {
 // Use DATABASE_PUBLIC_URL for Railway external connections, fall back to DATABASE_URL
 const databaseUrl = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL || "postgresql://placeholder:placeholder@localhost:5432/placeholder";
 
+// Configure connection options for Railway
+const connectionOptions = {
+  prepare: false,
+  ssl: "require" as const,
+  max: 1,
+  idle_timeout: 20,
+  connect_timeout: 10,
+};
+
 export const db =
   globalForDb.db ??
   drizzle(
-    postgres(databaseUrl, {
-      prepare: false,
-      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
-    }),
+    postgres(databaseUrl, connectionOptions),
     { schema }
   );
 
