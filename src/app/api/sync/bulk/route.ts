@@ -233,11 +233,14 @@ async function syncAolAllFolders(accountId: string, email: string, appPassword: 
       pass: appPassword,
     },
     logger: false,
+    // Increase timeout for large mailboxes
+    socketTimeout: 120000,
   });
 
   try {
     await client.connect();
     let totalEmails = 0;
+    let duplicatesSkipped = 0;
 
     // Get all mailboxes/folders
     const mailboxes = await client.list();
@@ -258,40 +261,58 @@ async function syncAolAllFolders(accountId: string, email: string, appPassword: 
 
         console.log(`[AOL] Folder ${path} has ${messageCount} messages`);
 
-        // Fetch all messages in this folder
-        // Process in chunks of 1000 to avoid memory issues
-        const CHUNK_SIZE = 1000;
-        for (let start = 1; start <= messageCount; start += CHUNK_SIZE) {
-          const end = Math.min(start + CHUNK_SIZE - 1, messageCount);
-          console.log(`[AOL] Fetching ${start}-${end} of ${messageCount} from ${path}`);
+        // Use UID FETCH to get all message UIDs first
+        console.log(`[AOL] Fetching UIDs for ${path}...`);
+        const uidList = await client.fetch("1:*", { uid: true, envelope: true, source: false });
 
-          const messages = await client.fetch(`${start}:${end}`, { envelope: true, source: false });
+        let fetched = 0;
+        for await (const message of uidList) {
+          try {
+            const uid = message.uid?.toString();
+            if (!uid) continue;
 
-          for await (const message of messages) {
-            try {
-              await db.insert(emailCache).values({
-                id: uuidv4(),
-                accountId: accountId,
-                providerEmailId: message.uid?.toString() || String(Date.now()) + Math.random(),
-                subject: message.envelope?.subject || null,
-                sender: message.envelope?.from?.[0]?.address || null,
-                senderEmail: message.envelope?.from?.[0]?.address || null,
-                receivedAt: message.envelope?.date ? new Date(message.envelope.date) : null,
-                isRead: !message.flags?.has("\\Seen"),
-                snippet: null,
-                cachedAt: new Date(),
-              });
-              totalEmails++;
-            } catch (err) {
-              console.error("Failed to cache AOL message:", err);
+            // Check if already cached
+            const existing = await db.query.emailCache.findFirst({
+              where: (table, { eq }) => eq(table.providerEmailId, uid),
+            });
+
+            if (existing) {
+              duplicatesSkipped++;
+              fetched++;
+              continue;
             }
+
+            await db.insert(emailCache).values({
+              id: uuidv4(),
+              accountId: accountId,
+              providerEmailId: uid,
+              subject: message.envelope?.subject || null,
+              sender: message.envelope?.from?.[0]?.address || null,
+              senderEmail: message.envelope?.from?.[0]?.address || null,
+              receivedAt: message.envelope?.date ? new Date(message.envelope.date) : null,
+              isRead: !message.flags?.has("\\Seen"),
+              snippet: null,
+              cachedAt: new Date(),
+            });
+            totalEmails++;
+            fetched++;
+
+            // Log progress every 1000 emails
+            if (fetched % 1000 === 0) {
+              console.log(`[AOL] Progress: ${fetched}/${messageCount} in ${path} (${totalEmails} new, ${duplicatesSkipped} duplicates)`);
+            }
+          } catch (err) {
+            console.error("Failed to cache AOL message:", err);
           }
         }
+
+        console.log(`[AOL] Finished ${path}: ${totalEmails} new, ${duplicatesSkipped} duplicates skipped`);
       } catch (err) {
         console.error(`[AOL] Error syncing folder ${path}:`, err);
       }
     }
 
+    console.log(`[AOL] Total: ${totalEmails} new emails cached, ${duplicatesSkipped} duplicates skipped`);
     return totalEmails;
   } finally {
     await client.logout();
