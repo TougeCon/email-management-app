@@ -363,7 +363,7 @@ export default function RulesPage() {
         <CardHeader>
           <CardTitle>Deletion Queue</CardTitle>
           <CardDescription>
-            Emails deleted in the last 24 hours. Restore before they're permanently
+            Emails deleted in the last 24 hours. Restore before they&apos;re permanently
             deleted.
           </CardDescription>
         </CardHeader>

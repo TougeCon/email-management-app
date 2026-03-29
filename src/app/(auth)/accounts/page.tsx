@@ -41,6 +41,7 @@ export default function AccountsPage() {
 
   useEffect(() => {
     fetchAccounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Check for OAuth callback messages
