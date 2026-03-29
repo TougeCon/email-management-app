@@ -1,4 +1,3 @@
-import { getServerSession } from "next-auth";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailAccounts, emailCache } from "@/lib/db/schema";
