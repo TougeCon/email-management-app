@@ -108,9 +108,12 @@ export async function POST(request: NextRequest) {
 
     // Execute the SQL
     // Note: We need to use the postgres client directly for raw SQL
+    // Use DATABASE_PUBLIC_URL for Railway external connections
     const { default: postgres } = await import("postgres");
-    const connectionString = process.env.DATABASE_URL!;
-    const client = postgres(connectionString);
+    const connectionString = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL!;
+    const client = postgres(connectionString, {
+      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+    });
 
     await client.unsafe(sql);
     await client.end();
