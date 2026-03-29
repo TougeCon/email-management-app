@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
         folder TEXT,
         labels JSONB,
         snippet TEXT,
+        body_preview TEXT,
         is_spam BOOLEAN DEFAULT FALSE,
         cached_at TIMESTAMP DEFAULT NOW()
       );
@@ -104,6 +105,10 @@ export async function POST(request: NextRequest) {
       CREATE INDEX IF NOT EXISTS idx_email_cache_account_id ON email_cache(account_id);
       CREATE INDEX IF NOT EXISTS idx_email_cache_received_at ON email_cache(received_at);
       CREATE INDEX IF NOT EXISTS idx_email_cache_sender_email ON email_cache(sender_email);
+
+      -- Add body_preview column if it doesn't exist
+      ALTER TABLE email_cache ADD COLUMN IF NOT EXISTS body_preview TEXT;
+      CREATE INDEX IF NOT EXISTS idx_email_cache_body_preview ON email_cache USING gin (to_tsvector('english', coalesce(body_preview, '')));
     `;
 
     // Execute the SQL
