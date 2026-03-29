@@ -1,65 +1,70 @@
 import type { AIQueryContext } from "@/types";
 
-interface CloudAIRequest {
+interface OllamaGenerateRequest {
+  model: string;
+  prompt: string;
+  stream?: boolean;
+}
+
+interface OllamaGenerateResponse {
+  model: string;
+  response: string;
+  done: boolean;
+}
+
+interface OllamaChatRequest {
   model: string;
   messages: { role: string; content: string }[];
   stream?: boolean;
-  temperature?: number;
 }
 
-interface CloudAIResponse {
-  choices?: { message: { content: string } }[];
-  message?: { content: string };
-  response?: string;
+interface OllamaChatResponse {
+  model: string;
+  message: { role: string; content: string };
+  done: boolean;
 }
 
 /**
- * Get the AI API URL from environment
+ * Get the Ollama cloud API URL
+ * Uses ollama.com's cloud API as per https://docs.ollama.com/api/authentication
  */
-function getApiUrl(): string {
-  return process.env.AI_API_URL || process.env.OLLAMA_API_URL || "https://api.openrouter.ai/api/v1";
+function getOllamaCloudUrl(): string {
+  return "https://ollama.com/api/generate";
 }
 
 /**
  * Get the API key from environment
  */
 function getApiKey(): string {
-  return process.env.AI_API_KEY || process.env.OPENROUTER_API_KEY || "";
+  return process.env.OLLAMA_CLOUD_API_KEY || process.env.OLLAMA_API_KEY || "";
 }
 
 /**
  * Get the model name from environment
  */
 function getModelName(): string {
-  return process.env.AI_MODEL || process.env.OLLAMA_MODEL || "meta-llama/llama-3.2-3b-instruct";
+  return process.env.OLLAMA_MODEL || "llama3.2";
 }
 
 /**
- * Send a prompt to cloud AI API and get a response
- * Supports OpenRouter, Together AI, Groq, and compatible APIs
+ * Send a prompt to Ollama cloud API and get a response
+ * Uses ollama.com's cloud API with Bearer token authentication
  */
 export async function queryOllama(prompt: string): Promise<string> {
-  const url = getApiUrl();
+  const url = getOllamaCloudUrl();
   const apiKey = getApiKey();
   const model = getModelName();
 
   // Check if API key is configured
   if (!apiKey) {
-    console.warn("No AI API key configured. Returning fallback response.");
-    return "AI is not configured. Please set AI_API_KEY or OPENROUTER_API_KEY in environment variables.";
+    console.warn("No Ollama API key configured. Returning fallback response.");
+    return "AI is not configured. Please set OLLAMA_CLOUD_API_KEY or OLLAMA_API_KEY in Railway environment variables.";
   }
 
-  const request: CloudAIRequest = {
+  const request: OllamaGenerateRequest = {
     model,
-    messages: [
-      {
-        role: "system",
-        content: "You are an AI assistant helping a user manage their emails. Be concise and helpful. You have access to email metadata but not actual email content for privacy reasons."
-      },
-      { role: "user", content: prompt }
-    ],
+    prompt: `You are an AI assistant helping a user manage their emails. Be concise and helpful.\n\nUser: ${prompt}\n\nResponse:`,
     stream: false,
-    temperature: 0.7,
   };
 
   const response = await fetch(url, {
@@ -67,33 +72,18 @@ export async function queryOllama(prompt: string): Promise<string> {
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${apiKey}`,
-      ...(url.includes("openrouter") ? {
-        "HTTP-Referer": "https://email-management-app-production.up.railway.app",
-        "X-Title": "Email Management App"
-      } : {}),
     },
     body: JSON.stringify(request),
   });
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`AI API error: ${response.status} - ${error}`);
+    throw new Error(`Ollama API error: ${response.status} - ${error}`);
   }
 
-  const data: CloudAIResponse = await response.json();
+  const data: OllamaGenerateResponse = await response.json();
 
-  // Handle different response formats
-  if (data.choices?.[0]?.message?.content) {
-    return data.choices[0].message.content;
-  }
-  if (data.message?.content) {
-    return data.message.content;
-  }
-  if (data.response) {
-    return data.response;
-  }
-
-  throw new Error("Unexpected response format from AI API");
+  return data.response;
 }
 
 /**
@@ -208,105 +198,17 @@ export function parseNaturalLanguageQuery(query: string): {
 
   // Extract keywords (simple extraction - remove common words)
   const commonWords = [
-    "the",
-    "a",
-    "an",
-    "is",
-    "are",
-    "was",
-    "were",
-    "be",
-    "been",
-    "being",
-    "have",
-    "has",
-    "had",
-    "do",
-    "does",
-    "did",
-    "will",
-    "would",
-    "could",
-    "should",
-    "may",
-    "might",
-    "must",
-    "shall",
-    "can",
-    "need",
-    "dare",
-    "ought",
-    "used",
-    "to",
-    "of",
-    "in",
-    "for",
-    "on",
-    "with",
-    "at",
-    "by",
-    "from",
-    "as",
-    "into",
-    "through",
-    "during",
-    "before",
-    "after",
-    "above",
-    "below",
-    "between",
-    "under",
-    "again",
-    "further",
-    "then",
-    "once",
-    "here",
-    "there",
-    "when",
-    "where",
-    "why",
-    "how",
-    "all",
-    "each",
-    "few",
-    "more",
-    "most",
-    "other",
-    "some",
-    "such",
-    "no",
-    "nor",
-    "not",
-    "only",
-    "own",
-    "same",
-    "so",
-    "than",
-    "too",
-    "very",
-    "just",
-    "and",
-    "but",
-    "if",
-    "or",
-    "because",
-    "until",
-    "while",
-    "although",
-    "though",
-    "after",
-    "before",
-    "when",
-    "whenever",
-    "email",
-    "emails",
-    "find",
-    "show",
-    "me",
-    "my",
-    "i",
-    "want",
-    "get",
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "must", "shall", "can", "need", "dare",
+    "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by",
+    "from", "as", "into", "through", "during", "before", "after", "above",
+    "below", "under", "again", "further", "then", "once", "here", "there",
+    "when", "where", "why", "how", "all", "each", "few", "more", "most",
+    "other", "some", "such", "no", "nor", "not", "only", "own", "same",
+    "so", "than", "too", "very", "just", "and", "but", "if", "or",
+    "because", "until", "while", "although", "though", "email", "emails",
+    "find", "show", "me", "my", "i", "want", "get",
   ];
 
   const words = query
