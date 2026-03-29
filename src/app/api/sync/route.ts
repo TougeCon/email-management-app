@@ -192,7 +192,8 @@ async function fetchOutlookEmails(accessToken: string, maxResults: number): Prom
 
 // AOL IMAP sync
 async function fetchAolEmails(email: string, appPassword: string, maxResults: number): Promise<SyncEmail[]> {
-  const { default: ImapFlow } = await import("imapflow");
+  const imapflow = await import("imapflow");
+  const ImapFlow = imapflow.ImapFlow;
 
   const client = new ImapFlow({
     host: "imap.aol.com",
@@ -210,7 +211,9 @@ async function fetchAolEmails(email: string, appPassword: string, maxResults: nu
     await client.mailboxOpen("INBOX");
 
     const emails: SyncEmail[] = [];
-    const messages = await client.fetch({ limit: Math.min(maxResults, 500) }, { envelope: true, source: false });
+    // Fetch messages using sequence range
+    const maxFetch = Math.min(maxResults, 500);
+    const messages = await client.fetch(`1:${maxFetch}`, { envelope: true, source: false });
 
     for await (const message of messages) {
       emails.push({
