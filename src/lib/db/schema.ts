@@ -101,6 +101,14 @@ export const senderRules = pgTable("sender_rules", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Chat History (for AI conversation persistence)
+export const chatHistory = pgTable("chat_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  role: text("role").notNull(), // 'user' | 'assistant'
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Relations
 export const emailAccountsRelations = relations(emailAccounts, ({ many }) => ({
   groupMembers: many(accountGroupMembers),

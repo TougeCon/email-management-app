@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { emailCache, emailAccounts } from "@/lib/db/schema";
-import { desc, count, sql, inArray, and } from "drizzle-orm";
+import { emailCache, emailAccounts, chatHistory } from "@/lib/db/schema";
+import { desc, count, inArray, and } from "drizzle-orm";
 import { queryOllama, buildEmailContext } from "@/lib/ai/ollama";
 import type { AIQueryContext } from "@/types";
 
@@ -76,15 +76,15 @@ export async function POST(request: Request) {
         accounts: accounts.map((a) => ({
           email: a.emailAddress,
           provider: a.provider,
-          emailCount: 0, // Would need separate query per account
+          emailCount: 0,
         })),
       },
     };
 
-    // Build the prompt with context
+    // Build the prompt with context and action capabilities
     const contextStr = buildEmailContext(context);
 
-    const fullPrompt = `You are an AI assistant helping a user manage their emails. You have access to metadata about their emails but not the actual content for privacy reasons.
+    const fullPrompt = `You are an AI assistant helping a user manage their emails. You have access to metadata about their emails.
 
 ${contextStr}
 
@@ -93,18 +93,35 @@ ${conversationHistory.map((m: { role: string; content: string }) => `${m.role}: 
 
 User: ${message}
 
+You can help the user take these actions by responding with a command:
+- To delete emails: respond with "ACTION: delete [criteria]" e.g., "ACTION: delete emails from newsletter@example.com"
+- To mark as spam: respond with "ACTION: mark_spam [criteria]" e.g., "ACTION: mark_spam emails from spam@domain.com"
+- To archive: respond with "ACTION: archive [criteria]" e.g., "ACTION: archive old promotional emails"
+
+The frontend will detect ACTION: commands and execute them automatically.
+
 Please provide a helpful response. Follow these guidelines:
 1. If asked about counts or statistics, provide specific numbers from the metadata
 2. If asked to find emails, suggest search terms and filters they can use
 3. If asked for cleanup suggestions, identify potential spam/newsletter patterns
-4. If asked for actions, provide step-by-step guidance
+4. For actions, use the ACTION: format above
 5. Be concise but informative - use bullet points when listing items
 6. Always mention specific sender emails or patterns when relevant
 
 Response:`;
 
-    // Query Ollama
+    // Query AI
     const aiResponse = await queryOllama(fullPrompt);
+
+    // Save conversation to database
+    try {
+      await db.insert(chatHistory).values([
+        { role: "user", content: message },
+        { role: "assistant", content: aiResponse },
+      ]);
+    } catch (err) {
+      console.error("Failed to save chat history:", err);
+    }
 
     return Response.json({
       response: aiResponse,
@@ -116,8 +133,49 @@ Response:`;
   } catch (error) {
     console.error("AI chat error:", error);
     return Response.json(
-      { error: "Failed to process AI request. Make sure Ollama is running." },
+      { error: "Failed to process AI request" },
       { status: 500 }
     );
+  }
+}
+
+export async function GET() {
+  try {
+    const session = await auth();
+    if (!session) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Get last 50 messages from chat history
+    const messages = await db
+      .select()
+      .from(chatHistory)
+      .orderBy(desc(chatHistory.createdAt))
+      .limit(50);
+
+    // Reverse to get chronological order
+    messages.reverse();
+
+    return Response.json({ messages });
+  } catch (error) {
+    console.error("Chat history fetch error:", error);
+    return Response.json({ error: "Failed to fetch chat history" }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  try {
+    const session = await auth();
+    if (!session) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Clear chat history
+    await db.delete(chatHistory);
+
+    return Response.json({ success: true });
+  } catch (error) {
+    console.error("Chat history clear error:", error);
+    return Response.json({ error: "Failed to clear chat history" }, { status: 500 });
   }
 }

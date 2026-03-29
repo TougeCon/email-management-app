@@ -101,6 +101,14 @@ export async function POST(request: NextRequest) {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
+      -- Chat History
+      CREATE TABLE IF NOT EXISTS chat_history (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
       -- Create indexes
       CREATE INDEX IF NOT EXISTS idx_email_cache_account_id ON email_cache(account_id);
       CREATE INDEX IF NOT EXISTS idx_email_cache_received_at ON email_cache(received_at);
