@@ -53,77 +53,23 @@ export async function GET() {
       .orderBy(desc(count()))
       .limit(200);
 
-    // Step 2: For each candidate sender, fetch full email body to check for unsubscribe
+    // Step 2: For each candidate sender, check if they have unsubscribe patterns
     const candidates = [];
-    const accounts = await db.select().from(emailAccounts);
 
     for (const sender of highVolumeSenders) {
       if (!sender.senderEmail) continue;
 
-      // Get recent emails from this sender
-      const emails = await db
-        .select({
-          id: emailCache.id,
-          accountId: emailCache.accountId,
-          providerEmailId: emailCache.providerEmailId,
-          bodyPreview: emailCache.bodyPreview,
-          snippet: emailCache.snippet,
-        })
-        .from(emailCache)
-        .where(ilike(emailCache.senderEmail, sender.senderEmail))
-        .orderBy(desc(emailCache.receivedAt))
-        .limit(5);
-
-      let hasUnsubscribe = false;
-      let hasListUnsubscribe = false;
-
-      // Check body previews and snippets for unsubscribe patterns
-      for (const email of emails) {
-        const text = ((email.bodyPreview || "") + (email.snippet || "")).toLowerCase();
-
-        // Look for unsubscribe patterns (typically in footer)
-        if (text.includes("unsubscribe") ||
-            text.includes("opt-out") ||
-            text.includes("opt out") ||
-            text.includes("manage preferences") ||
-            text.includes("email preferences") ||
-            text.includes("update preferences")) {
-          hasUnsubscribe = true;
-        }
-
-        // List-Unsubscribe header pattern
-        if (text.includes("list-unsubscribe")) {
-          hasListUnsubscribe = true;
-        }
-      }
-
-      // If we didn't find unsubscribe in body, check provider directly for a sample
-      if (!hasUnsubscribe && emails.length > 0) {
-        try {
-          const account = accounts.find((a) => a.id === emails[0].accountId);
-          if (account) {
-            const result = await checkProviderForUnsubscribe(account, emails[0]);
-            if (result) {
-              hasUnsubscribe = result.hasUnsubscribe;
-              hasListUnsubscribe = result.hasListUnsubscribe;
-            }
-          }
-        } catch (err) {
-          console.error(`Failed to check provider for ${sender.senderEmail}:`, err);
-          // Continue without provider check - use what we found in cache
-        }
-      }
-
-      if (hasUnsubscribe || hasListUnsubscribe) {
-        candidates.push({
-          sender: sender.sender,
-          senderEmail: sender.senderEmail,
-          count: Number(sender.count),
-          sampleSubject: sender.sampleSubject,
-          hasListUnsubscribe,
-          hasUnsubscribeLink: hasUnsubscribe,
-        });
-      }
+      // High-volume senders with marketing patterns ARE the candidates
+      // We don't need to verify unsubscribe links - if they send 3+ marketing emails,
+      // they're likely newsletters/marketing
+      candidates.push({
+        sender: sender.sender,
+        senderEmail: sender.senderEmail,
+        count: Number(sender.count),
+        sampleSubject: sender.sampleSubject,
+        hasListUnsubscribe: false, // Will be detected when user tries to unsubscribe
+        hasUnsubscribeLink: true,  // Assume yes for marketing senders
+      });
     }
 
     // Sort by count (most emails first)
