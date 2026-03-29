@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Mail, Trash2, RefreshCw } from "lucide-react";
+import { Mail, Trash2, RefreshCw, Plus, Shield } from "lucide-react";
 
 interface Account {
   id: string;
@@ -201,38 +201,61 @@ export default function AccountsPage() {
       {/* Connected Accounts */}
       <Card>
         <CardHeader>
-          <CardTitle>Connected Accounts</CardTitle>
-          <CardDescription>
-            Your currently connected email accounts
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Connected Accounts</CardTitle>
+              <CardDescription>
+                Your currently connected email accounts
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchAccounts} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p>Loading accounts...</p>
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-muted-foreground">Loading accounts...</span>
+            </div>
           ) : accounts.length === 0 ? (
-            <p className="text-muted-foreground">
-              No accounts connected yet. Use the options below to connect your email accounts.
-            </p>
+            <div className="text-center py-12">
+              <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-full w-fit mx-auto mb-4">
+                <Mail className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-medium mb-2">No accounts connected</h3>
+              <p className="text-muted-foreground max-w-sm mx-auto">
+                Connect your first email account to start managing your emails in one place.
+              </p>
+            </div>
           ) : (
             <div className="space-y-3">
               {accounts.map((account) => (
                 <div
                   key={account.id}
-                  className="flex items-center justify-between rounded-lg border p-4"
+                  className="flex items-center justify-between rounded-lg border p-4 hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-center gap-3">
-                    <Mail className="h-5 w-5 text-muted-foreground" />
+                    <div className={`p-2 rounded-full ${
+                      account.provider === 'gmail' ? 'bg-red-100 text-red-600' :
+                      account.provider === 'outlook' ? 'bg-blue-100 text-blue-600' :
+                      'bg-orange-100 text-orange-600'
+                    }`}>
+                      <Mail className="h-5 w-5" />
+                    </div>
                     <div>
                       <p className="font-medium">{account.emailAddress}</p>
                       <p className="text-sm text-muted-foreground">
                         {PROVIDER_NAMES[account.provider] || account.provider}
-                        {account.displayName && ` - ${account.displayName}`}
+                        {account.displayName && ` • ${account.displayName}`}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
-                      className={`rounded-full px-2 py-1 text-xs ${
+                      className={`rounded-full px-2 py-1 text-xs font-medium ${
                         account.isActive
                           ? "bg-green-100 text-green-700"
                           : "bg-gray-100 text-gray-700"
@@ -244,6 +267,7 @@ export default function AccountsPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleDeleteAccount(account.id)}
+                      className="text-muted-foreground hover:text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -256,98 +280,111 @@ export default function AccountsPage() {
       </Card>
 
       {/* Add Accounts */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Gmail */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Connect Gmail</CardTitle>
-            <CardDescription>
-              Connect your Gmail or Google Workspace account
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={handleConnectGmail} className="w-full">
-              <Mail className="mr-2 h-4 w-4" />
-              Connect Gmail
-            </Button>
-          </CardContent>
-        </Card>
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Add New Account</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          {/* Gmail */}
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <div className="p-3 bg-red-100 dark:bg-red-900 rounded-full w-fit mb-2">
+                <Mail className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <CardTitle className="text-lg">Gmail</CardTitle>
+              <CardDescription>
+                Gmail or Google Workspace
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={handleConnectGmail} className="w-full bg-red-600 hover:bg-red-700">
+                <Plus className="mr-2 h-4 w-4" />
+                Connect
+              </Button>
+            </CardContent>
+          </Card>
 
-        {/* Outlook */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Connect Outlook</CardTitle>
-            <CardDescription>
-              Connect your Outlook.com or Hotmail account
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={handleConnectOutlook} className="w-full">
-              <Mail className="mr-2 h-4 w-4" />
-              Connect Outlook
-            </Button>
-          </CardContent>
-        </Card>
+          {/* Outlook */}
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full w-fit mb-2">
+                <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <CardTitle className="text-lg">Outlook</CardTitle>
+              <CardDescription>
+                Outlook.com or Hotmail
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={handleConnectOutlook} className="w-full bg-blue-600 hover:bg-blue-700">
+                <Plus className="mr-2 h-4 w-4" />
+                Connect
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* AOL */}
+          <Card className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <div className="p-3 bg-orange-100 dark:bg-orange-900 rounded-full w-fit mb-2">
+                <Shield className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+              </div>
+              <CardTitle className="text-lg">AOL / AIM</CardTitle>
+              <CardDescription>
+                Using app password
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAddAol} className="space-y-3">
+                <div className="space-y-2">
+                  <Input
+                    type="email"
+                    value={aolEmail}
+                    onChange={(e) => setAolEmail(e.target.value)}
+                    placeholder="you@aol.com"
+                    required
+                    className="text-sm"
+                  />
+                  <Input
+                    type="password"
+                    value={aolPassword}
+                    onChange={(e) => setAolPassword(e.target.value)}
+                    placeholder="App password"
+                    required
+                    className="text-sm"
+                  />
+                </div>
+                <Button type="submit" disabled={addingAol} className="w-full bg-orange-600 hover:bg-orange-700">
+                  {addingAol ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Connect
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* AOL */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Connect AOL</CardTitle>
-          <CardDescription>
-            Connect your AOL account using an app password. You can generate one in
-            your AOL account security settings after enabling 2FA.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAddAol} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="aol-email">Email Address</Label>
-                <Input
-                  id="aol-email"
-                  type="email"
-                  value={aolEmail}
-                  onChange={(e) => setAolEmail(e.target.value)}
-                  placeholder="you@aol.com"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="aol-password">App Password</Label>
-                <Input
-                  id="aol-password"
-                  type="password"
-                  value={aolPassword}
-                  onChange={(e) => setAolPassword(e.target.value)}
-                  placeholder="App password"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="aol-display">Display Name (optional)</Label>
-                <Input
-                  id="aol-display"
-                  value={aolDisplayName}
-                  onChange={(e) => setAolDisplayName(e.target.value)}
-                  placeholder="Personal AOL"
-                />
-              </div>
+      {/* Info Card */}
+      <Card className="bg-blue-50 dark:bg-blue-900/10 border-blue-200">
+        <CardContent className="pt-6">
+          <div className="flex gap-3">
+            <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div>
+              <p className="font-medium text-blue-800 dark:text-blue-200">
+                Secure Connection
+              </p>
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                Your email credentials are encrypted and stored securely. OAuth connections use official provider APIs with read-only access by default.
+              </p>
             </div>
-            <Button type="submit" disabled={addingAol}>
-              {addingAol ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <Mail className="mr-2 h-4 w-4" />
-                  Connect AOL
-                </>
-              )}
-            </Button>
-          </form>
+          </div>
         </CardContent>
       </Card>
     </div>
