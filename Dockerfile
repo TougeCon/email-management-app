@@ -23,7 +23,7 @@ ENV NEXT_TELEMETRY_DISABLED 1
 
 RUN npm run build
 
-# Production image, copy all the files and run next
+# Production image, copy all the files and run next (cache bust 2026-03-29)
 FROM node:20-alpine AS runner
 WORKDIR /app
 
