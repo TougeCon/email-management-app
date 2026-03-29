@@ -13,7 +13,7 @@ const databaseUrl = process.env.DATABASE_URL || process.env.DATABASE_PUBLIC_URL;
 let dbInstance: PostgresJsDatabase<typeof schema> | null = null;
 let clientInstance: ReturnType<typeof postgres> | null = null;
 
-function initializeDb() {
+function initializeDb(): PostgresJsDatabase<typeof schema> {
   if (!databaseUrl) {
     throw new Error("DATABASE_URL or DATABASE_PUBLIC_URL must be set");
   }
@@ -38,12 +38,12 @@ function initializeDb() {
   return dbInstance;
 }
 
-// Export db that initializes on first property access
+// Export db as a Proxy for lazy initialization
 export const db = new Proxy({} as PostgresJsDatabase<typeof schema>, {
-  get(_target, prop) {
-    const db = initializeDb();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (db as any)[prop];
+  get(_target, prop: string) {
+    const actualDb = initializeDb();
+    // Use Reflect.get to properly access properties
+    return Reflect.get(actualDb, prop);
   },
 });
 
