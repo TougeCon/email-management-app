@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Mail, Trash2, RefreshCw, Plus, Shield, Inbox } from "lucide-react";
+import { Mail, Trash2, RefreshCw, Plus, Shield, Inbox, Database } from "lucide-react";
 import { SyncButton } from "@/components/sync-button";
 
 interface Account {
@@ -190,6 +190,47 @@ export default function AccountsPage() {
     }
   };
 
+  const handleBulkSync = async (accountId: string, accountEmail: string) => {
+    if (!confirm(`This will sync ALL emails from all folders for ${accountEmail}. This may take several minutes. Continue?`)) {
+      return;
+    }
+
+    setSyncingAccount(accountId);
+    try {
+      const res = await fetch("/api/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        toast({
+          title: "Bulk sync complete",
+          description: `Synced ${data.totalEmailsSynced} emails from all folders.`,
+        });
+        fetchAccounts();
+      } else {
+        toast({
+          title: "Bulk sync failed",
+          description: data.error || "Failed to sync emails",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Bulk sync failed",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncingAccount(null);
+    }
+  };
+
+  const [syncingAccount, setSyncingAccount] = useState<string | null>(null);
+
   return (
     <div className="space-y-6">
       <div>
@@ -277,7 +318,7 @@ export default function AccountsPage() {
                   </div>
 
                   {/* Sync section for this account */}
-                  <div className="border-t pt-3 mt-3">
+                  <div className="border-t pt-3 mt-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="text-sm text-muted-foreground">
                         {account.lastSyncedAt ? (
@@ -292,6 +333,30 @@ export default function AccountsPage() {
                         variant="outline"
                         size="sm"
                       />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">
+                        Bulk sync all folders (INBOX, Spam, Sent, etc.)
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleBulkSync(account.id, account.emailAddress)}
+                        disabled={syncingAccount === account.id}
+                        className="gap-2"
+                      >
+                        {syncingAccount === account.id ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                            Syncing...
+                          </>
+                        ) : (
+                          <>
+                            <Database className="h-4 w-4" />
+                            Bulk Sync ALL
+                          </>
+                        )}
+                      </Button>
                     </div>
                   </div>
                 </div>
