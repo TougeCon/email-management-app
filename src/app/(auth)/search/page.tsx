@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { Search, Mail, RefreshCw, Sparkles } from "lucide-react";
 
@@ -202,7 +202,7 @@ export default function SearchPage() {
             </Button>
           </div>
           <CardDescription>
-            Use natural language and click "AI Parse" to extract search terms
+            Use natural language and click AI Parse to extract search terms
           </CardDescription>
         </CardHeader>
         <CardContent>
