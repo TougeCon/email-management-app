@@ -57,6 +57,7 @@ export const emailCache = pgTable("email_cache", {
   folder: text("folder"),
   labels: jsonb("labels").$type<string[]>(),
   snippet: text("snippet"),
+  bodyPreview: text("body_preview"),
   isSpam: boolean("is_spam").default(false),
   cachedAt: timestamp("cached_at").defaultNow().notNull(),
 }, (table) => ({

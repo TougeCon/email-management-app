@@ -85,6 +85,46 @@ export async function POST(request: Request) {
   }
 }
 
+// Extract plain text body from Gmail message
+function extractGmailBody(payload: any): string {
+  if (!payload) return "";
+
+  // Try to get plain text body first
+  if (payload.body?.data) {
+    try {
+      return Buffer.from(payload.body.data, "base64").toString("utf-8").slice(0, 500);
+    } catch {
+      // Fall through to parts
+    }
+  }
+
+  // Search through parts for plain text
+  const parts = payload.parts || [];
+  for (const part of parts) {
+    if (part.mimeType === "text/plain" && part.body?.data) {
+      try {
+        return Buffer.from(part.body.data, "base64").toString("utf-8").slice(0, 500);
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  // Fallback to html if no plain text
+  for (const part of parts) {
+    if (part.mimeType === "text/html" && part.body?.data) {
+      try {
+        const html = Buffer.from(part.body.data, "base64").toString("utf-8");
+        return html.replace(/<[^>]*>/g, "").slice(0, 500);
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  return "";
+}
+
 // Sync ALL Gmail labels
 async function syncGmailAllLabels(accountId: string, accessToken: string): Promise<number> {
   const { google } = await import("googleapis");
@@ -128,7 +168,7 @@ async function syncGmailAllLabels(accountId: string, accessToken: string): Promi
           const fullMessage = await gmail.users.messages.get({
             userId: "me",
             id: message.id!,
-            format: "metadata",
+            format: "full",
             metadataHeaders: ["From", "To", "Subject", "Date"],
           });
 
@@ -139,6 +179,7 @@ async function syncGmailAllLabels(accountId: string, accessToken: string): Promi
           const from = getHeader("from") || "";
           const fromEmail = extractEmail(from);
           const dateStr = getHeader("date");
+          const bodyPreview = extractGmailBody(fullMessage.data.payload);
 
           await db.insert(emailCache).values({
             id: uuidv4(),
@@ -150,6 +191,7 @@ async function syncGmailAllLabels(accountId: string, accessToken: string): Promi
             receivedAt: dateStr ? new Date(dateStr) : new Date(),
             isRead: !fullMessage.data.labelIds?.includes("UNREAD"),
             snippet: fullMessage.data.snippet || null,
+            bodyPreview: bodyPreview || null,
             cachedAt: new Date(),
           });
           totalEmails++;
@@ -185,10 +227,11 @@ async function syncOutlookAllFolders(accountId: string, accessToken: string): Pr
     let nextLink: string | null = null;
 
     do {
+      // Fetch full body content for AI analysis
       let request: any = client.api(`/me/mailFolders/${folder.id}/messages`)
-        .select("id,subject,from,receivedDateTime,isRead,bodyPreview,internetMessageId")
+        .select("id,subject,from,receivedDateTime,isRead,body,internetMessageId,sender")
         .orderby("receivedDateTime desc")
-        .top(500);
+        .top(100);
 
       if (nextLink) {
         request = client.api(nextLink);
@@ -199,16 +242,28 @@ async function syncOutlookAllFolders(accountId: string, accessToken: string): Pr
       nextLink = response["@odata.nextLink"] || null;
 
       for (const msg of messages) {
+        // Extract plain text from body (HTML stripped)
+        let bodyPreview = null;
+        if (msg.body?.content) {
+          const content = msg.body.content;
+          if (msg.body.contentType === "html") {
+            bodyPreview = content.replace(/<[^>]*>/g, "").slice(0, 500);
+          } else {
+            bodyPreview = content.slice(0, 500);
+          }
+        }
+
         await db.insert(emailCache).values({
           id: uuidv4(),
           accountId: accountId,
           providerEmailId: msg.id,
           subject: msg.subject || null,
-          sender: msg.from?.emailAddress?.name || null,
-          senderEmail: msg.from?.emailAddress?.address || null,
+          sender: msg.from?.emailAddress?.name || msg.sender?.emailAddress?.name || null,
+          senderEmail: msg.from?.emailAddress?.address || msg.sender?.emailAddress?.address || null,
           receivedAt: msg.receivedDateTime ? new Date(msg.receivedDateTime) : null,
           isRead: msg.isRead,
-          snippet: msg.bodyPreview || null,
+          snippet: bodyPreview,
+          bodyPreview: bodyPreview || null,
           cachedAt: new Date(),
         });
         totalEmails++;
@@ -217,6 +272,11 @@ async function syncOutlookAllFolders(accountId: string, accessToken: string): Pr
   }
 
   return totalEmails;
+}
+
+// Strip HTML and get plain text
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, "");
 }
 
 // Sync ALL AOL IMAP folders
@@ -233,7 +293,6 @@ async function syncAolAllFolders(accountId: string, email: string, appPassword: 
       pass: appPassword,
     },
     logger: false,
-    // Increase timeout for large mailboxes
     socketTimeout: 120000,
   });
 
@@ -242,7 +301,6 @@ async function syncAolAllFolders(accountId: string, email: string, appPassword: 
     let totalEmails = 0;
     let duplicatesSkipped = 0;
 
-    // Get all mailboxes/folders
     const mailboxes = await client.list();
     console.log(`[AOL] Found ${mailboxes.length} folders`);
 
@@ -261,9 +319,9 @@ async function syncAolAllFolders(accountId: string, email: string, appPassword: 
 
         console.log(`[AOL] Folder ${path} has ${messageCount} messages`);
 
-        // Use UID FETCH to get all message UIDs first
+        // Fetch UIDs first
         console.log(`[AOL] Fetching UIDs for ${path}...`);
-        const uidList = await client.fetch("1:*", { uid: true, envelope: true, source: false });
+        const uidList = await client.fetch("1:*", { uid: true, envelope: true });
 
         let fetched = 0;
         for await (const message of uidList) {
@@ -282,6 +340,27 @@ async function syncAolAllFolders(accountId: string, email: string, appPassword: 
               continue;
             }
 
+            // Fetch body content (first 500 chars)
+            let bodyPreview: string | null = null;
+            try {
+              // Fetch full message source and extract body
+              const messages = await client.fetch(`${uid}`, { source: true });
+              for await (const msg of messages) {
+                if (msg.source) {
+                  const rawSource = Buffer.from(msg.source).toString("utf-8");
+                  // Extract body after headers (double CRLF separates headers from body)
+                  const parts = rawSource.split(/\r\n\r\n/);
+                  if (parts.length > 1) {
+                    const body = parts.slice(1).join('\r\n\r\n');
+                    bodyPreview = stripHtml(body).slice(0, 500);
+                  }
+                }
+                break; // Only process first message
+              }
+            } catch (bodyErr) {
+              console.log(`[AOL] Could not fetch body for UID ${uid}`);
+            }
+
             await db.insert(emailCache).values({
               id: uuidv4(),
               accountId: accountId,
@@ -291,13 +370,13 @@ async function syncAolAllFolders(accountId: string, email: string, appPassword: 
               senderEmail: message.envelope?.from?.[0]?.address || null,
               receivedAt: message.envelope?.date ? new Date(message.envelope.date) : null,
               isRead: !message.flags?.has("\\Seen"),
-              snippet: null,
+              snippet: bodyPreview,
+              bodyPreview: bodyPreview || null,
               cachedAt: new Date(),
             });
             totalEmails++;
             fetched++;
 
-            // Log progress every 1000 emails
             if (fetched % 1000 === 0) {
               console.log(`[AOL] Progress: ${fetched}/${messageCount} in ${path} (${totalEmails} new, ${duplicatesSkipped} duplicates)`);
             }
