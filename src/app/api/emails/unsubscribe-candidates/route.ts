@@ -103,11 +103,14 @@ export async function GET() {
           const account = accounts.find((a) => a.id === emails[0].accountId);
           if (account) {
             const result = await checkProviderForUnsubscribe(account, emails[0]);
-            hasUnsubscribe = result.hasUnsubscribe;
-            hasListUnsubscribe = result.hasListUnsubscribe;
+            if (result) {
+              hasUnsubscribe = result.hasUnsubscribe;
+              hasListUnsubscribe = result.hasListUnsubscribe;
+            }
           }
         } catch (err) {
           console.error(`Failed to check provider for ${sender.senderEmail}:`, err);
+          // Continue without provider check - use what we found in cache
         }
       }
 
@@ -132,7 +135,8 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Unsubscribe candidates error:", error);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return Response.json({ error: "Internal server error", details: errorMessage }, { status: 500 });
   }
 }
 
@@ -278,6 +282,8 @@ async function checkProviderForUnsubscribe(
     }
   } catch (err) {
     console.error("Provider check failed:", err);
+    // Return null to indicate failure - caller should handle gracefully
+    return null;
   }
 
   return { hasListUnsubscribe: false, hasUnsubscribe: false };
