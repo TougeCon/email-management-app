@@ -13,18 +13,58 @@ interface Message {
   timestamp: Date;
 }
 
+interface Account {
+  id: string;
+  provider: string;
+  emailAddress: string;
+  displayName: string | null;
+}
+
 export default function AIChatPage() {
   const { toast } = useToast();
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Hello! I'm your AI email assistant. I can help you search through your emails, suggest cleanup actions, analyze patterns, and recommend rules for managing incoming emails. What would you like to know?",
+      content: "Hello! I'm your AI email assistant. I can help you analyze your emails, suggest cleanup actions, identify patterns, and find specific messages. What would you like to know?",
       timestamp: new Date(),
     },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchAccounts();
+  }, []);
+
+  const fetchAccounts = async () => {
+    try {
+      const res = await fetch("/api/accounts");
+      const data = await res.json();
+      setAccounts(data.accounts || []);
+      setSelectedAccounts((data.accounts || []).map((a: Account) => a.id));
+    } catch (error) {
+      console.error("Error fetching accounts:", error);
+    }
+  };
+
+  const toggleAccount = (accountId: string) => {
+    setSelectedAccounts((prev) =>
+      prev.includes(accountId)
+        ? prev.filter((id) => id !== accountId)
+        : [...prev, accountId]
+    );
+  };
+
+  const selectAllAccounts = () => {
+    setSelectedAccounts(accounts.map((a) => a.id));
+  };
+
+  const deselectAllAccounts = () => {
+    setSelectedAccounts([]);
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -53,6 +93,7 @@ export default function AIChatPage() {
             role: m.role,
             content: m.content,
           })),
+          accountIds: selectedAccounts,
         }),
       });
 
@@ -93,30 +134,66 @@ export default function AIChatPage() {
     }
   };
 
+  // These suggestions match what the AI can actually do with the email metadata it has access to
   const exampleQueries = [
-    "How many emails do I have from newsletters?",
-    "Find emails from PayPal",
-    "What senders email me most often?",
-    "Suggest emails I might want to delete",
-    "Show me unread emails from this week",
-    "Which emails should I archive?",
+    "How many total emails do I have?",
+    "What are my top senders by count?",
+    "Find emails from a specific sender",
+    "Suggest emails that might be spam or newsletters",
+    "Show me patterns in my recent emails",
+    "Help me find emails to clean up",
   ];
 
   const quickActions = [
-    { label: "Find spam", query: "Find emails that look like spam" },
-    { label: "Newsletters", query: "Find all newsletter emails" },
-    { label: "Unread", query: "Show me important unread emails" },
-    { label: "Old emails", query: "Find emails older than 30 days" },
+    { label: "Top senders", query: "What senders email me most often?" },
+    { label: "Spam patterns", query: "What patterns suggest spam in my emails?" },
+    { label: "Cleanup suggestions", query: "What emails should I consider deleting?" },
+    { label: "Newsletter detection", query: "How can I identify newsletter emails?" },
   ];
 
   return (
-    <div className="h-[calc(100vh-100px)] flex flex-col">
+    <div className="h-[calc(100vh-80px)] flex flex-col">
       <div className="mb-4">
         <h1 className="text-3xl font-bold">AI Chat</h1>
         <p className="text-muted-foreground">
           Ask questions about your emails in natural language
         </p>
       </div>
+
+      {/* Account Selection */}
+      <Card className="mb-4">
+        <CardHeader className="py-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">Select Accounts</CardTitle>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={selectAllAccounts} disabled={loading}>
+                Select All
+              </Button>
+              <Button variant="outline" size="sm" onClick={deselectAllAccounts} disabled={loading}>
+                Deselect All
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="py-2">
+          <div className="flex flex-wrap gap-2">
+            {accounts.map((account) => (
+              <button
+                key={account.id}
+                onClick={() => toggleAccount(account.id)}
+                className={`rounded-full px-3 py-1 text-xs transition-colors ${
+                  selectedAccounts.includes(account.id)
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+                disabled={loading}
+              >
+                {account.displayName || account.emailAddress}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Messages */}
       <Card className="flex-1 overflow-hidden flex flex-col mb-4">

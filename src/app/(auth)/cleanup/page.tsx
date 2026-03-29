@@ -41,6 +41,7 @@ interface CleanupRule {
 export default function CleanupPage() {
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [senderFilter, setSenderFilter] = useState("");
   const [results, setResults] = useState<EmailResult[]>([]);
@@ -53,6 +54,22 @@ export default function CleanupPage() {
     fetchAccounts();
     fetchRules();
   }, []);
+
+  const toggleAccount = (accountId: string) => {
+    setSelectedAccounts((prev) =>
+      prev.includes(accountId)
+        ? prev.filter((id) => id !== accountId)
+        : [...prev, accountId]
+    );
+  };
+
+  const selectAllAccounts = () => {
+    setSelectedAccounts(accounts.map((a) => a.id));
+  };
+
+  const deselectAllAccounts = () => {
+    setSelectedAccounts([]);
+  };
 
   const fetchAccounts = async () => {
     try {
@@ -75,6 +92,15 @@ export default function CleanupPage() {
   };
 
   const handleSearch = async () => {
+    if (selectedAccounts.length === 0) {
+      toast({
+        title: "No accounts selected",
+        description: "Please select at least one account to search",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     setSelectedEmails(new Set());
 
@@ -82,7 +108,7 @@ export default function CleanupPage() {
       const params = new URLSearchParams({
         query: searchQuery,
         sender: senderFilter,
-        accounts: accounts.map((a) => a.id).join(","),
+        accounts: selectedAccounts.join(","),
       });
 
       const res = await fetch(`/api/emails/search?${params}`);
@@ -188,6 +214,39 @@ export default function CleanupPage() {
           Search and bulk delete spam or unwanted emails
         </p>
       </div>
+
+      {/* Account Selection */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Select Accounts</CardTitle>
+          <CardDescription>Choose which accounts to search</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2 mb-3">
+            <Button variant="outline" size="sm" onClick={selectAllAccounts}>
+              Select All
+            </Button>
+            <Button variant="outline" size="sm" onClick={deselectAllAccounts}>
+              Deselect All
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {accounts.map((account) => (
+              <button
+                key={account.id}
+                onClick={() => toggleAccount(account.id)}
+                className={`rounded-full px-3 py-1 text-sm transition-colors ${
+                  selectedAccounts.includes(account.id)
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {account.displayName || account.emailAddress}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Search Filters */}
       <Card>

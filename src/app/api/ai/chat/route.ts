@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailCache, emailAccounts } from "@/lib/db/schema";
-import { desc, count, sql } from "drizzle-orm";
+import { desc, count, sql, inArray, and } from "drizzle-orm";
 import { queryOllama, buildEmailContext } from "@/lib/ai/ollama";
 import type { AIQueryContext } from "@/types";
 
@@ -13,18 +13,25 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { message, conversationHistory = [] } = body;
+    const { message, conversationHistory = [], accountIds = [] } = body;
 
     if (!message) {
       return Response.json({ error: "Message required" }, { status: 400 });
     }
 
-    // Get email metadata for context
-    const accounts = await db.select().from(emailAccounts);
+    // Get email metadata for context - filter by selected accounts
+    let accounts = await db.select().from(emailAccounts);
+    if (accountIds.length > 0) {
+      accounts = accounts.filter((a) => accountIds.includes(a.id));
+    }
 
     const totalEmails = await db
       .select({ count: count() })
       .from(emailCache);
+
+    const accountConditions = accountIds.length > 0
+      ? [inArray(emailCache.accountId, accountIds)]
+      : [];
 
     const topSenders = await db
       .select({
@@ -33,6 +40,7 @@ export async function POST(request: Request) {
         count: count(),
       })
       .from(emailCache)
+      .where(accountConditions.length > 0 ? and(...accountConditions) : undefined)
       .groupBy(emailCache.senderEmail, emailCache.sender)
       .orderBy(desc(count()))
       .limit(20);
@@ -46,6 +54,7 @@ export async function POST(request: Request) {
         bodyPreview: emailCache.bodyPreview,
       })
       .from(emailCache)
+      .where(accountConditions.length > 0 ? and(...accountConditions) : undefined)
       .orderBy(desc(emailCache.receivedAt))
       .limit(20);
 
@@ -60,7 +69,9 @@ export async function POST(request: Request) {
         recentEmails: recentEmails.map((e) => ({
           subject: e.subject || "(No subject)",
           sender: e.sender || "Unknown",
+          senderEmail: e.senderEmail || "",
           date: e.receivedAt || new Date(),
+          bodyPreview: e.bodyPreview,
         })),
         accounts: accounts.map((a) => ({
           email: a.emailAddress,
