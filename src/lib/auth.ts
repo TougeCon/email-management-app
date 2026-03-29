@@ -73,6 +73,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
   },
-  trustHost: true,
-  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "fallback-secret-for-development",
+  trustedProviders: ["credentials"],
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
 });

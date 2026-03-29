@@ -19,10 +19,13 @@ function initializeDb(): PostgresJsDatabase<typeof schema> {
   }
 
   if (!dbInstance) {
+    // Check if using pgbouncer (Supabase/Railway) - disable prepared statements
+    const isPgbouncer = databaseUrl.includes("pgbouncer") || databaseUrl.includes(":6543");
+
     clientInstance = globalForDb.client ?? postgres(databaseUrl, {
-      prepare: false,
-      ssl: "require",
-      max: 1,
+      prepare: isPgbouncer ? false : undefined,
+      ssl: databaseUrl.includes("localhost") ? "prefer" : "require",
+      max: isPgbouncer ? 1 : undefined,
       idle_timeout: 20,
       connect_timeout: 10,
     });

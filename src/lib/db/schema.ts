@@ -5,6 +5,7 @@ import {
   timestamp,
   boolean,
   jsonb,
+  index
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -58,7 +59,11 @@ export const emailCache = pgTable("email_cache", {
   snippet: text("snippet"),
   isSpam: boolean("is_spam").default(false),
   cachedAt: timestamp("cached_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  idx_email_cache_account_id: index("idx_email_cache_account_id").on(table.accountId),
+  idx_email_cache_received_at: index("idx_email_cache_received_at").on(table.receivedAt),
+  idx_email_cache_sender_email: index("idx_email_cache_sender_email").on(table.senderEmail),
+}));
 
 // Cleanup Rules
 export const cleanupRules = pgTable("cleanup_rules", {
@@ -130,6 +135,7 @@ export const deletionQueueRelations = relations(deletionQueue, ({ one }) => ({
     references: [emailAccounts.id],
   }),
 }));
+
 
 // Type exports
 export type EmailAccount = typeof emailAccounts.$inferSelect;

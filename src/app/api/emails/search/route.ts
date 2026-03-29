@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailCache, emailAccounts } from "@/lib/db/schema";
-import { eq, inArray, or, ilike, and, desc } from "drizzle-orm";
+import { eq, inArray, or, ilike, and, desc, count } from "drizzle-orm";
 
 export async function GET(request: Request) {
   try {
@@ -50,6 +50,14 @@ export async function GET(request: Request) {
     // Execute query
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
+    // Get total count first
+    const totalResult = await db
+      .select({ count: count() })
+      .from(emailCache)
+      .where(whereClause);
+    const total = totalResult[0]?.count || 0;
+
+    // Get paginated results
     const emails = await db
       .select({
         id: emailCache.id,
@@ -66,9 +74,6 @@ export async function GET(request: Request) {
       .orderBy(desc(emailCache.receivedAt))
       .limit(pageSize)
       .offset(page * pageSize);
-
-    // Get total count (simplified - would need separate count query in production)
-    const total = emails.length;
 
     return Response.json({
       emails,
