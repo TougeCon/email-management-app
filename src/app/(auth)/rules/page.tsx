@@ -41,7 +41,7 @@ export default function RulesPage() {
     name: "",
     senderPattern: "",
     subjectKeyword: "",
-    action: "delete" as "delete" | "archive",
+    action: "mark_spam" as "delete" | "archive" | "mark_spam",
   });
   const [creating, setCreating] = useState(false);
 
@@ -154,6 +154,38 @@ export default function RulesPage() {
     }
   };
 
+  const handleApplyRule = async (ruleId: string) => {
+    if (!confirm("Apply this rule to all existing emails? This may take a while.")) {
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/rules/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleId, applyToExisting: true }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        const result = data.results?.[0];
+        toast({
+          title: "Rule applied",
+          description: `${result?.processedCount || 0} emails processed`,
+        });
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to apply rule",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleToggleRule = async (ruleId: string, isActive: boolean) => {
     try {
       const res = await fetch("/api/rules", {
@@ -246,13 +278,17 @@ export default function RulesPage() {
                   onChange={(e) =>
                     setNewRule({
                       ...newRule,
-                      action: e.target.value as "delete" | "archive",
+                      action: e.target.value as "delete" | "archive" | "mark_spam",
                     })
                   }
                 >
                   <option value="delete">Delete</option>
                   <option value="archive">Archive</option>
+                  <option value="mark_spam">Mark as Spam</option>
                 </select>
+                <p className="text-xs text-muted-foreground">
+                  Spam emails are hidden from inbox but kept for 30 days
+                </p>
               </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
@@ -342,6 +378,13 @@ export default function RulesPage() {
                       onClick={() => handleToggleRule(rule.id, !rule.isActive)}
                     >
                       {rule.isActive ? "Deactivate" : "Activate"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleApplyRule(rule.id)}
+                    >
+                      Apply Now
                     </Button>
                     <Button
                       variant="ghost"

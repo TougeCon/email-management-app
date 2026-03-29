@@ -87,6 +87,21 @@ export async function getOutlookProfile(accessToken: string): Promise<{
   };
 }
 
+/**
+ * Mark email as spam in Outlook (move to Junk Email folder)
+ */
+export async function markOutlookAsSpam(
+  accessToken: string,
+  emailId: string
+): Promise<void> {
+  const client = getGraphClient(accessToken);
+
+  // Move message to Junk Email folder
+  await client.api(`/me/messages/${emailId}/move`).post({
+    destinationId: "JunkEmail",
+  });
+}
+
 // Types
 export interface OutlookEmail {
   id: string;

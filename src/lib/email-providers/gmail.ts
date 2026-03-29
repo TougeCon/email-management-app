@@ -181,6 +181,25 @@ export async function archiveGmailEmail(
 }
 
 /**
+ * Mark email as spam in Gmail
+ */
+export async function markGmailAsSpam(
+  accessToken: string,
+  emailId: string
+): Promise<void> {
+  const gmail = getGmailClient(accessToken);
+
+  // Gmail uses the SPAM label to mark messages as spam
+  await gmail.users.messages.modify({
+    userId: "me",
+    id: emailId,
+    requestBody: {
+      addLabelIds: ["SPAM"],
+    },
+  });
+}
+
+/**
  * Get Gmail profile (email address)
  */
 export async function getGmailProfile(accessToken: string): Promise<{

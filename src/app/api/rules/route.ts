@@ -34,6 +34,12 @@ export async function POST(request: Request) {
       return Response.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // Validate action
+    const validActions = ["delete", "archive", "mark_spam"];
+    if (!validActions.includes(action)) {
+      return Response.json({ error: "Invalid action. Must be delete, archive, or mark_spam" }, { status: 400 });
+    }
+
     const ruleId = uuidv4();
 
     await db.insert(cleanupRules).values({
