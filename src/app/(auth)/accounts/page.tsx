@@ -220,12 +220,11 @@ export default function AccountsPage() {
       // Use chunked sync for large mailboxes - each chunk syncs 500 emails
       // This avoids request timeouts by making multiple shorter requests
       let lastMessageId: string | null = null;
-      let hasMore = true;
 
-      while (hasMore && chunkCount < maxChunks) {
+      while (chunkCount < maxChunks) {
         chunkCount++;
 
-        const chunkRes = await fetch("/api/sync/chunked", {
+        const syncResult = await fetch("/api/sync/chunked", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -235,12 +234,12 @@ export default function AccountsPage() {
           }),
         });
 
-        const chunkData = await chunkRes.json();
+        const syncData: { success: boolean; syncedCount: number; hasMore: boolean; lastMessageId: string | null; error?: string } = await syncResult.json();
 
-        if (chunkData.success) {
-          totalSynced += chunkData.syncedCount;
-          hasMore = chunkData.hasMore;
-          lastMessageId = chunkData.lastMessageId;
+        if (syncData.success) {
+          totalSynced += syncData.syncedCount;
+          lastMessageId = syncData.lastMessageId;
+          if (!syncData.hasMore) break;
 
           // Update UI with progress every 5 chunks
           if (chunkCount % 5 === 0) {
@@ -250,7 +249,7 @@ export default function AccountsPage() {
             });
           }
         } else {
-          throw new Error(chunkData.error || "Sync failed");
+          throw new Error(syncData.error || "Sync failed");
         }
 
         // Small delay between chunks to avoid rate limits
