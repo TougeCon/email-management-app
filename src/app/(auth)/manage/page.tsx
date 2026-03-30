@@ -16,7 +16,7 @@ interface Suggestion {
   sampleSubject: string | null;
   lastReceived: Date | null;
   actionType: "unsubscribe" | "delete";
-  hasUnsubscribeLink: boolean;
+  reason: string;
 }
 
 interface Account {
@@ -167,10 +167,20 @@ export default function ManagePage() {
       .filter((s) => s.senderEmail && selected.has(s.senderEmail))
       .reduce((sum, s) => sum + s.count, 0);
 
-    if (!confirm(`This will process ${selected.size} sender(s) affecting approximately ${totalEmails} emails.
+    const selectedUnsubscribeCount = suggestions
+      .filter((s) => s.senderEmail && selected.has(s.senderEmail) && s.actionType === "unsubscribe")
+      .reduce((sum, s) => sum + s.count, 0);
 
-${unsubscribeSenders > 0 ? `• Unsubscribe from ${unsubscribeSenders} sender(s)` : ""}
-${deleteSenders > 0 ? `• Delete emails from ${deleteSenders} sender(s)` : ""}
+    const selectedDeleteCount = suggestions
+      .filter((s) => s.senderEmail && selected.has(s.senderEmail) && s.actionType === "delete")
+      .reduce((sum, s) => sum + s.count, 0);
+
+    if (!confirm(`This will process ${selected.size} sender(s):
+
+${selectedUnsubscribeCount > 0 ? `• Unsubscribe: ~${selectedUnsubscribeCount.toLocaleString()} emails from ${unsubscribeSenders} sender(s)` : ""}
+${selectedDeleteCount > 0 ? `• Delete: ~${selectedDeleteCount.toLocaleString()} emails from ${deleteSenders} sender(s)` : ""}
+
+Total: ~${totalEmails.toLocaleString()} emails
 
 Continue?`)) {
       return;
@@ -380,9 +390,7 @@ Continue?`)) {
             <div>
               <CardTitle>Suggested Actions</CardTitle>
               <CardDescription>
-                {filteredSuggestions.length} senders • ~{totalEmails} emails
-                {unsubscribeCount > 0 && <span className="ml-2 text-blue-600">• {unsubscribeCount} unsubscribe</span>}
-                {deleteCount > 0 && <span className="ml-2 text-red-600">• {deleteCount} delete</span>}
+                {filteredSuggestions.length} senders • ~{totalEmails.toLocaleString()} emails could be processed
               </CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={fetchSuggestions} disabled={loading}>
@@ -392,6 +400,32 @@ Continue?`)) {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Stats */}
+          <div className="flex gap-4 mb-4">
+            <div className="flex-1 p-3 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200">
+              <div className="flex items-center gap-2">
+                <UserX className="h-5 w-5 text-blue-600" />
+                <div>
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Unsubscribe</p>
+                  <p className="text-lg font-bold text-blue-900 dark:text-blue-100">
+                    {suggestions.filter(s => s.actionType === "unsubscribe").length} senders
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 p-3 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-200">
+              <div className="flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-red-600" />
+                <div>
+                  <p className="text-sm font-medium text-red-800 dark:text-red-200">Delete</p>
+                  <p className="text-lg font-bold text-red-900 dark:text-red-100">
+                    {suggestions.filter(s => s.actionType === "delete").length} senders
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Tabs */}
           <div className="flex gap-2 mb-4 border-b pb-2">
             <Button
@@ -421,10 +455,40 @@ Continue?`)) {
 
           {/* Actions Bar */}
           {filteredSuggestions.length > 0 && (
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-2 mb-4 flex-wrap">
               <Button variant="outline" size="sm" onClick={toggleSelectAll}>
                 {selected.size === filteredSuggestions.length ? "Deselect All" : "Select All"}
               </Button>
+              {activeTab !== "unsubscribe" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const unsubscribeEmails = suggestions
+                      .filter(s => s.actionType === "unsubscribe")
+                      .map(s => s.senderEmail!);
+                    setSelected(new Set(unsubscribeEmails));
+                  }}
+                  className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                >
+                  Select All Unsubscribe ({suggestions.filter(s => s.actionType === "unsubscribe").length})
+                </Button>
+              )}
+              {activeTab !== "delete" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const deleteEmails = suggestions
+                      .filter(s => s.actionType === "delete")
+                      .map(s => s.senderEmail!);
+                    setSelected(new Set(deleteEmails));
+                  }}
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                >
+                  Select All Delete ({suggestions.filter(s => s.actionType === "delete").length})
+                </Button>
+              )}
               <Button
                 variant="default"
                 size="sm"
@@ -484,10 +548,13 @@ Continue?`)) {
                     onClick={(e) => e.stopPropagation()}
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium truncate">
                         {suggestion.sender || suggestion.senderEmail}
                       </p>
+                      <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
+                        {suggestion.reason}
+                      </span>
                       {suggestion.actionType === "unsubscribe" ? (
                         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1">
                           <UserX className="h-3 w-3" />
@@ -501,7 +568,10 @@ Continue?`)) {
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {suggestion.senderEmail} • {suggestion.count} email{suggestion.count !== 1 ? "s" : ""}
+                      {suggestion.senderEmail}
+                    </p>
+                    <p className="text-xs font-medium text-blue-600 mt-1">
+                      {suggestion.count} email{suggestion.count !== 1 ? "s" : ""} from this sender
                     </p>
                     <div className="flex items-center gap-4 mt-1">
                       {suggestion.sampleSubject && (
