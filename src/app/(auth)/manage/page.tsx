@@ -47,6 +47,7 @@ export default function ManagePage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState(false);
   const [processed, setProcessed] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState({ current: 0, total: 0, currentSender: "" });
   const [loading, setLoading] = useState(true);
   const [deletionQueue, setDeletionQueue] = useState<DeletionQueueItem[]>([]);
   const [activeTab, setActiveTab] = useState<"all" | "unsubscribe" | "delete">("all");
@@ -189,11 +190,16 @@ export default function ManagePage() {
     }
 
     setProcessing(true);
+    setProgress({ current: 0, total: selected.size, currentSender: "" });
     const newlyProcessed = new Set<string>();
 
-    for (const senderEmail of selected) {
+    const selectedArray = Array.from(selected);
+    for (let i = 0; i < selectedArray.length; i++) {
+      const senderEmail = selectedArray[i];
       const suggestion = suggestions.find((s) => s.senderEmail === senderEmail);
       if (!suggestion || !suggestion.senderEmail) continue;
+
+      setProgress({ current: i + 1, total: selected.size, currentSender: suggestion.senderEmail || senderEmail });
 
       try {
         // Unsubscribe if action includes it and sender supports it
@@ -233,6 +239,8 @@ export default function ManagePage() {
 
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
+
+    setProgress({ current: 0, total: 0, currentSender: "" });
 
     setProcessed(newlyProcessed);
     setSuggestions(suggestions.filter((s) => s.senderEmail && !newlyProcessed.has(s.senderEmail)));
@@ -524,6 +532,33 @@ export default function ManagePage() {
                     <UserX className="mr-2 h-4 w-4" />
                     Unsubscribe & Delete All
                   </Button>
+                </div>
+              )}
+
+              {/* Progress Indicator */}
+              {processing && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-3 mb-2">
+                    <RefreshCw className="h-5 w-5 text-blue-600 animate-spin" />
+                    <span className="font-medium text-blue-800 dark:text-blue-200">
+                      Processing senders...
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-blue-700 dark:text-blue-300 mb-2">
+                    <span>Sender {progress.current} of {progress.total}</span>
+                    <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                    />
+                  </div>
+                  {progress.currentSender && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 truncate">
+                      Current: {progress.currentSender}
+                    </p>
+                  )}
                 </div>
               )}
             </div>

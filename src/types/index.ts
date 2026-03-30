@@ -72,6 +72,7 @@ export interface AIQueryContext {
     totalEmails: number;
     topSenders: { email: string; count: number }[];
     recentEmails: {
+      id: string;
       subject: string;
       sender: string;
       senderEmail: string;

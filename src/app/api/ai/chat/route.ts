@@ -1,9 +1,96 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailCache, emailAccounts, chatHistory } from "@/lib/db/schema";
-import { desc, count, inArray, and } from "drizzle-orm";
+import { desc, count, inArray, and, eq, ilike, or } from "drizzle-orm";
 import { queryOllama, buildEmailContext } from "@/lib/ai/ollama";
+import { decrypt } from "@/lib/encryption";
 import type { AIQueryContext } from "@/types";
+
+// Fetch full email content from provider
+async function fetchFullEmailContent(account: typeof emailAccounts.$inferSelect, providerEmailId: string): Promise<string | null> {
+  try {
+    const accessToken = decrypt(account.encryptedAccessToken);
+
+    if (account.provider === "gmail") {
+      const { google } = await import("googleapis");
+      const { OAuth2Client } = await import("google-auth-library");
+
+      const client = new OAuth2Client({
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      });
+      client.setCredentials({ access_token: accessToken });
+
+      const gmail = google.gmail({ version: "v1", auth: client });
+      const message = await gmail.users.messages.get({
+        userId: "me",
+        id: providerEmailId,
+        format: "full",
+      });
+
+      let fullBody = "";
+      const extractBody = (part: any) => {
+        if (part.body?.data) {
+          fullBody += Buffer.from(part.body.data, "base64").toString("utf-8");
+        }
+        if (part.parts) {
+          for (const p of part.parts) extractBody(p);
+        }
+      };
+      extractBody(message.data.payload);
+      return fullBody;
+    } else if (account.provider === "outlook") {
+      const { Client } = await import("@microsoft/microsoft-graph-client");
+
+      const graphClient = Client.init({
+        authProvider: (done) => {
+          done(null, accessToken);
+        },
+      });
+
+      const msg: any = await graphClient
+        .api(`/me/messages/${providerEmailId}`)
+        .select("body")
+        .get();
+
+      return msg.body?.content || "";
+    } else if (account.provider === "aol") {
+      const { ImapFlow } = await import("imapflow");
+
+      const client = new ImapFlow({
+        host: "imap.aol.com",
+        port: 993,
+        secure: true,
+        auth: {
+          user: account.emailAddress,
+          pass: accessToken,
+        },
+        logger: false,
+      });
+
+      try {
+        await client.connect();
+        await client.mailboxOpen("INBOX");
+
+        const messages = await client.fetch(`*:${providerEmailId}`, {
+          uid: true,
+          source: true,
+        });
+
+        for await (const msg of messages) {
+          if (msg.uid?.toString() === providerEmailId && msg.source) {
+            return Buffer.from(msg.source).toString("utf-8");
+          }
+        }
+      } finally {
+        await client.logout().catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.error("Failed to fetch full email content:", err);
+  }
+  return null;
+}
 
 export async function POST(request: Request) {
   try {
@@ -45,8 +132,12 @@ export async function POST(request: Request) {
       .orderBy(desc(count()))
       .limit(20);
 
+    // Get recent emails with full body preview for context
     const recentEmails = await db
       .select({
+        id: emailCache.id,
+        accountId: emailCache.accountId,
+        providerEmailId: emailCache.providerEmailId,
         subject: emailCache.subject,
         sender: emailCache.sender,
         senderEmail: emailCache.senderEmail,
@@ -56,7 +147,7 @@ export async function POST(request: Request) {
       .from(emailCache)
       .where(accountConditions.length > 0 ? and(...accountConditions) : undefined)
       .orderBy(desc(emailCache.receivedAt))
-      .limit(20);
+      .limit(50);
 
     // Build context
     const context: AIQueryContext = {
@@ -67,6 +158,7 @@ export async function POST(request: Request) {
           count: s.count,
         })),
         recentEmails: recentEmails.map((e) => ({
+          id: e.id,
           subject: e.subject || "(No subject)",
           sender: e.sender || "Unknown",
           senderEmail: e.senderEmail || "",
@@ -83,6 +175,20 @@ export async function POST(request: Request) {
 
     // Get list of user's own email addresses (to exclude from spam/delete suggestions)
     const userOwnEmails = accounts.map((a) => a.emailAddress.toLowerCase());
+
+    // Check if user is asking about a specific email that needs full content
+    let fullEmailContent: string | null = null;
+    const emailIdMatch = message.match(/email[:\s]*([a-f0-9-]{36})/i); // UUID pattern
+    if (emailIdMatch) {
+      const emailId = emailIdMatch[1];
+      const emailEntry = recentEmails.find((e) => e.id === emailId);
+      if (emailEntry) {
+        const account = accounts.find((a) => a.id === emailEntry.accountId);
+        if (account) {
+          fullEmailContent = await fetchFullEmailContent(account, emailEntry.providerEmailId);
+        }
+      }
+    }
 
     // Build the prompt with context and action capabilities
     const contextStr = buildEmailContext(context);
@@ -106,7 +212,7 @@ The user's own email addresses are: ${userOwnEmails.join(", ")}
 - Get straight to the point
 
 ### Understanding the User's Goals
-- The user has ~21,000 emails and wants to process them in LARGE BATCHES
+- The user wants to process emails in LARGE BATCHES for efficiency
 - They want to unsubscribe from newsletters AND delete all existing emails from those senders
 - They prefer efficiency over perfection - better to process 1000 emails at once than review individually
 - The Manage page (/manage) is their primary tool for bulk operations
@@ -149,12 +255,12 @@ The frontend will:
 - Finding specific emails by sender, subject, or content
 - Suggesting which senders to unsubscribe from
 - Answering questions about email patterns
+- Reading full email content when user asks about specific emails
+- Summarizing email threads or conversations
+- Extracting information from emails (dates, links, instructions, etc.)
 
-### What You CANNOT Do
-- Access individual email content (only metadata: subject, sender, date, preview)
-- Browse the inbox like a human would
-- Take actions without using ACTION: format
-- Remember things outside this conversation (chat history is saved but limited)
+## FULL EMAIL CONTENT (if requested)
+${fullEmailContent ? `The user is asking about a specific email. Here is the full content:\n\n${fullEmailContent}` : "No specific email content requested."}
 
 ## CONVERSATION HISTORY
 ${conversationHistory.map((m: { role: string; content: string }) => `${m.role}: ${m.content}`).join("\n")}
@@ -163,7 +269,7 @@ ${conversationHistory.map((m: { role: string; content: string }) => `${m.role}: 
 User: ${message}
 
 ## YOUR RESPONSE
-Be brief, direct, and actionable. If an action is requested, use ACTION: format. If asked a question, answer it directly without unnecessary elaboration.
+Be brief, direct, and actionable. If an action is requested, use ACTION: format. If asked a question, answer it directly without unnecessary elaboration. If the user asks about a specific email's content, use the FULL EMAIL CONTENT section above.
 
 Response:`;
 
