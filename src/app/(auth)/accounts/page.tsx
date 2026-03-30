@@ -225,7 +225,7 @@ export default function AccountsPage() {
       while (hasMore && chunkCount < maxChunks) {
         chunkCount++;
 
-        const res = await fetch("/api/sync/chunked", {
+        const chunkRes = await fetch("/api/sync/chunked", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -235,12 +235,12 @@ export default function AccountsPage() {
           }),
         });
 
-        const data = await res.json();
+        const chunkData = await chunkRes.json();
 
-        if (data.success) {
-          totalSynced += data.syncedCount;
-          hasMore = data.hasMore;
-          lastMessageId = data.lastMessageId;
+        if (chunkData.success) {
+          totalSynced += chunkData.syncedCount;
+          hasMore = chunkData.hasMore;
+          lastMessageId = chunkData.lastMessageId;
 
           // Update UI with progress every 5 chunks
           if (chunkCount % 5 === 0) {
@@ -250,7 +250,7 @@ export default function AccountsPage() {
             });
           }
         } else {
-          throw new Error(data.error || "Sync failed");
+          throw new Error(chunkData.error || "Sync failed");
         }
 
         // Small delay between chunks to avoid rate limits
