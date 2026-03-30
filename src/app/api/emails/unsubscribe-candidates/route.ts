@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailCache } from "@/lib/db/schema";
-import { desc, count, eq, or, ilike, and, not } from "drizzle-orm";
+import { desc, count, eq, or, ilike, and, not, max } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -34,7 +34,7 @@ export async function GET() {
         senderEmail: emailCache.senderEmail,
         sender: emailCache.sender,
         count: count(),
-        sampleSubject: emailCache.subject,
+        sampleSubject: max(emailCache.subject),
       })
       .from(emailCache)
       .where(
