@@ -198,7 +198,7 @@ async function syncAolChunk(
   email: string,
   appPassword: string,
   chunkSize: number,
-  _lastMessageId?: string | null
+  lastUid?: string | null
 ): Promise<{ hasMore: boolean; lastMessageId: string | null; syncedCount: number }> {
   const imapflow = await import("imapflow");
   const ImapFlow = imapflow.ImapFlow;
@@ -218,17 +218,35 @@ async function syncAolChunk(
     await client.connect();
     await client.mailboxOpen("INBOX");
 
-    const messages = await client.fetch("1:*", { uid: true, envelope: true, source: false });
     let syncedCount = 0;
     let processed = 0;
+    let lastProcessedUid: string | null = null;
 
-    for await (const message of messages) {
+    // Fetch all UIDs first
+    const uidList = await client.fetch("1:*", { uid: true });
+    const uids: string[] = [];
+    for await (const message of uidList) {
+      if (message.uid) {
+        uids.push(message.uid.toString());
+      }
+    }
+
+    console.log(`[AOL] Found ${uids.length} total messages`);
+
+    // Process messages starting from lastUid
+    let startIndex = 0;
+    if (lastUid) {
+      const lastUidNum = parseInt(lastUid, 10);
+      startIndex = uids.findIndex(uid => parseInt(uid, 10) > lastUidNum);
+      if (startIndex === -1) startIndex = uids.length;
+      console.log(`[AOL] Resuming from UID ${lastUid}, starting at index ${startIndex}`);
+    }
+
+    for (let i = startIndex; i < uids.length; i++) {
+      const uid = uids[i];
       if (processed >= chunkSize) break;
 
       try {
-        const uid = message.uid?.toString();
-        if (!uid) continue;
-
         // Check if already cached
         const existing = await db.query.emailCache.findFirst({
           where: (table, { eq }) => eq(table.providerEmailId, uid),
@@ -236,30 +254,42 @@ async function syncAolChunk(
 
         if (existing) {
           processed++;
+          lastProcessedUid = uid;
           continue;
         }
 
-        await db.insert(emailCache).values({
-          id: uuidv4(),
-          accountId: accountId,
-          providerEmailId: uid,
-          subject: message.envelope?.subject || null,
-          sender: message.envelope?.from?.[0]?.address || null,
-          senderEmail: message.envelope?.from?.[0]?.address || null,
-          receivedAt: message.envelope?.date ? new Date(message.envelope.date) : null,
-          isRead: !message.flags?.has("\\Seen"),
-          cachedAt: new Date(),
-        });
-        syncedCount++;
-        processed++;
+        // Fetch envelope for this message
+        const messages = await client.fetch(uid, { uid: true, envelope: true });
+        for await (const message of messages) {
+          await db.insert(emailCache).values({
+            id: uuidv4(),
+            accountId: accountId,
+            providerEmailId: uid,
+            subject: message.envelope?.subject || null,
+            sender: message.envelope?.from?.[0]?.address || null,
+            senderEmail: message.envelope?.from?.[0]?.address || null,
+            receivedAt: message.envelope?.date ? new Date(message.envelope.date) : null,
+            isRead: !message.flags?.has("\\Seen"),
+            cachedAt: new Date(),
+          });
+          syncedCount++;
+          processed++;
+          lastProcessedUid = uid;
+          break;
+        }
       } catch (err) {
-        console.error("Failed to cache AOL message:", err);
+        console.error(`[AOL] Failed to cache message UID ${uid}:`, err);
+        processed++; // Count failed messages as processed to avoid infinite loop
+        lastProcessedUid = uid;
       }
     }
 
+    const hasMore = startIndex + chunkSize < uids.length;
+    console.log(`[AOL] Synced ${syncedCount} emails, processed ${processed}, hasMore: ${hasMore}, lastUid: ${lastProcessedUid}`);
+
     return {
-      hasMore: processed < (client as any).mailbox?.exists,
-      lastMessageId: null, // AOL uses sequence numbers, not page tokens
+      hasMore,
+      lastMessageId: lastProcessedUid,
       syncedCount,
     };
   } finally {
