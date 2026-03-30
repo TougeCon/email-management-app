@@ -213,13 +213,6 @@ Continue?`)) {
           if (searchData.emails && searchData.emails.length > 0) {
             const emailIds = searchData.emails.map((e: any) => e.id);
 
-            // Show confirmation for large deletions
-            if (emailIds.length > 10) {
-              if (!confirm(`Delete ${emailIds.length} emails from ${suggestion.senderEmail}?`)) {
-                continue;
-              }
-            }
-
             const deleteRes = await fetch("/api/emails/delete", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
