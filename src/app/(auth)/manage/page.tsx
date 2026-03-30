@@ -138,6 +138,7 @@ export default function ManagePage() {
   };
 
   const filteredSuggestions = suggestions.filter((s) => {
+    if (!s.senderEmail) return false; // Skip null sender emails
     if (activeTab === "all") return true;
     if (activeTab === "unsubscribe") return s.actionType === "unsubscribe";
     if (activeTab === "delete") return s.actionType === "delete";
@@ -155,15 +156,15 @@ export default function ManagePage() {
     }
 
     const unsubscribeSenders = suggestions
-      .filter((s) => selected.has(s.senderEmail) && s.actionType === "unsubscribe")
+      .filter((s) => s.senderEmail && selected.has(s.senderEmail) && s.actionType === "unsubscribe")
       .length;
 
     const deleteSenders = suggestions
-      .filter((s) => selected.has(s.senderEmail) && s.actionType === "delete")
+      .filter((s) => s.senderEmail && selected.has(s.senderEmail) && s.actionType === "delete")
       .length;
 
     const totalEmails = suggestions
-      .filter((s) => selected.has(s.senderEmail))
+      .filter((s) => s.senderEmail && selected.has(s.senderEmail))
       .reduce((sum, s) => sum + s.count, 0);
 
     if (!confirm(`This will process ${selected.size} sender(s) affecting approximately ${totalEmails} emails.
@@ -180,14 +181,14 @@ Continue?`)) {
 
     for (const senderEmail of selected) {
       const suggestion = suggestions.find((s) => s.senderEmail === senderEmail);
-      if (!suggestion) continue;
+      if (!suggestion || !suggestion.senderEmail) continue;
 
       try {
         if (suggestion.actionType === "unsubscribe") {
           const res = await fetch("/api/emails/unsubscribe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ senderEmail }),
+            body: JSON.stringify({ senderEmail: suggestion.senderEmail }),
           });
 
           const data = await res.json();
@@ -196,7 +197,7 @@ Continue?`)) {
           }
         } else if (suggestion.actionType === "delete") {
           // Search for emails from this sender and delete them
-          const searchRes = await fetch(`/api/emails/search?sender=${encodeURIComponent(senderEmail)}`);
+          const searchRes = await fetch(`/api/emails/search?sender=${encodeURIComponent(suggestion.senderEmail)}`);
           const searchData = await searchRes.json();
 
           if (searchData.emails && searchData.emails.length > 0) {
@@ -204,7 +205,7 @@ Continue?`)) {
 
             // Show confirmation for large deletions
             if (emailIds.length > 10) {
-              if (!confirm(`Delete ${emailIds.length} emails from ${senderEmail}?`)) {
+              if (!confirm(`Delete ${emailIds.length} emails from ${suggestion.senderEmail}?`)) {
                 continue;
               }
             }
@@ -229,7 +230,7 @@ Continue?`)) {
     }
 
     setProcessed(newlyProcessed);
-    setSuggestions(suggestions.filter((s) => !newlyProcessed.has(s.senderEmail)));
+    setSuggestions(suggestions.filter((s) => s.senderEmail && !newlyProcessed.has(s.senderEmail)));
     setSelected(new Set(selected));
 
     toast({
@@ -465,20 +466,20 @@ Continue?`)) {
             <div className="space-y-2 max-h-[60vh] overflow-y-auto">
               {filteredSuggestions.map((suggestion) => (
                 <div
-                  key={suggestion.senderEmail}
+                  key={suggestion.senderEmail!}
                   className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                    selected.has(suggestion.senderEmail)
+                    selected.has(suggestion.senderEmail!)
                       ? suggestion.actionType === "unsubscribe"
                         ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200"
                         : "bg-red-50 dark:bg-red-900/20 border-red-200"
                       : "hover:bg-gray-50 dark:hover:bg-gray-800"
                   }`}
-                  onClick={() => toggleSelect(suggestion.senderEmail)}
+                  onClick={() => toggleSelect(suggestion.senderEmail!)}
                 >
                   <input
                     type="checkbox"
-                    checked={selected.has(suggestion.senderEmail)}
-                    onChange={() => toggleSelect(suggestion.senderEmail)}
+                    checked={selected.has(suggestion.senderEmail!)}
+                    onChange={() => toggleSelect(suggestion.senderEmail!)}
                     className="h-4 w-4"
                     onClick={(e) => e.stopPropagation()}
                   />
@@ -516,7 +517,7 @@ Continue?`)) {
                       )}
                     </div>
                   </div>
-                  {processed.has(suggestion.senderEmail) && (
+                  {processed.has(suggestion.senderEmail!) && (
                     <CheckCircle className="h-5 w-5 text-green-600" />
                   )}
                 </div>
