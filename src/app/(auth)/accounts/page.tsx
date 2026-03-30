@@ -23,6 +23,7 @@ interface Account {
   isActive: boolean;
   lastSyncedAt: string | null;
   createdAt: string;
+  emailCount?: number;
 }
 
 const PROVIDER_NAMES: Record<string, string> = {
@@ -74,7 +75,22 @@ export default function AccountsPage() {
     try {
       const res = await fetch("/api/accounts");
       const data = await res.json();
-      setAccounts(data.accounts || []);
+      const accounts = data.accounts || [];
+
+      // Fetch email counts for each account
+      const accountsWithCounts = await Promise.all(
+        accounts.map(async (account: Account) => {
+          try {
+            const countRes = await fetch(`/api/emails/count?accountId=${account.id}`);
+            const countData = await countRes.json();
+            return { ...account, emailCount: countData.count || 0 };
+          } catch {
+            return { ...account, emailCount: 0 };
+          }
+        })
+      );
+
+      setAccounts(accountsWithCounts);
     } catch (error) {
       console.error("Error fetching accounts:", error);
       toast({
@@ -293,6 +309,7 @@ export default function AccountsPage() {
                         <p className="text-sm text-muted-foreground">
                           {PROVIDER_NAMES[account.provider] || account.provider}
                           {account.displayName && ` • ${account.displayName}`}
+                          {account.emailCount !== undefined && ` • ${account.emailCount.toLocaleString()} emails`}
                         </p>
                       </div>
                     </div>

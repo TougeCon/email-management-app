@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailAccounts, emailCache } from "@/lib/db/schema";
-import { desc, count } from "drizzle-orm";
+import { desc, count, eq } from "drizzle-orm";
 import {
   Card,
   CardContent,
@@ -20,6 +20,17 @@ export default async function DashboardPage() {
   // Get account stats
   const accounts = await db.select().from(emailAccounts);
   const totalEmails = await db.select({ count: count() }).from(emailCache);
+
+  // Get email count per account
+  const accountEmailCounts = await Promise.all(
+    accounts.map(async (account) => {
+      const result = await db
+        .select({ count: count() })
+        .from(emailCache)
+        .where(eq(emailCache.accountId, account.id));
+      return { accountId: account.id, email: account.emailAddress, count: result[0]?.count || 0 };
+    })
+  );
 
   // Get recent emails
   const recentEmails = await db
@@ -145,40 +156,44 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {accounts.map((account) => (
-                <div
-                  key={account.id}
-                  className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-full ${
-                      account.provider === 'gmail' ? 'bg-red-100 text-red-600' :
-                      account.provider === 'outlook' ? 'bg-blue-100 text-blue-600' :
-                      'bg-orange-100 text-orange-600'
-                    }`}>
-                      <Mail className="h-4 w-4" />
+              {accounts.map((account) => {
+                const accountCount = accountEmailCounts.find((c) => c.accountId === account.id);
+                return (
+                  <div
+                    key={account.id}
+                    className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-full ${
+                        account.provider === 'gmail' ? 'bg-red-100 text-red-600' :
+                        account.provider === 'outlook' ? 'bg-blue-100 text-blue-600' :
+                        'bg-orange-100 text-orange-600'
+                      }`}>
+                        <Mail className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{account.emailAddress}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {account.provider.toUpperCase()}
+                          {account.displayName && ` • ${account.displayName}`}
+                          {accountCount && ` • ${accountCount.count.toLocaleString()} emails`}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{account.emailAddress}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {account.provider.toUpperCase()}
-                        {account.displayName && ` • ${account.displayName}`}
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs ${
+                          account.isActive
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {account.isActive ? "Active" : "Inactive"}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs ${
-                        account.isActive
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {account.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

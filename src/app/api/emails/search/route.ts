@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailCache, emailAccounts } from "@/lib/db/schema";
-import { eq, inArray, or, ilike, and, desc, count } from "drizzle-orm";
+import { eq, inArray, or, ilike, and, desc, count, gte, lte } from "drizzle-orm";
 
 export async function GET(request: Request) {
   try {
@@ -13,6 +13,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("query") || "";
     const sender = searchParams.get("sender") || "";
+    const startDate = searchParams.get("startDate") || "";
+    const endDate = searchParams.get("endDate") || "";
     const accountIds = searchParams.get("accounts")?.split(",").filter(Boolean) || [];
     const page = parseInt(searchParams.get("page") || "0");
     const pageSize = parseInt(searchParams.get("pageSize") || "20");
@@ -46,6 +48,16 @@ export async function GET(request: Request) {
           ilike(emailCache.senderEmail, `%${sender}%`)
         )
       );
+    }
+
+    // Filter by date range
+    if (startDate) {
+      conditions.push(gte(emailCache.receivedAt, new Date(startDate)));
+    }
+    if (endDate) {
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+      conditions.push(lte(emailCache.receivedAt, endDateTime));
     }
 
     // Execute query

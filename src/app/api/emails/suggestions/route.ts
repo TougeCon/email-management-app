@@ -1,14 +1,19 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailCache } from "@/lib/db/schema";
-import { desc, count, max, not, ilike, and, or, sql } from "drizzle-orm";
+import { desc, count, max, not, ilike, and, or, sql, inArray, gte, lte } from "drizzle-orm";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await auth();
     if (!session) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const { searchParams } = new URL(request.url);
+    const accountIds = searchParams.getAll("accountId");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
 
     // Exclude personal email domains
     const excludePersonalEmails = [
@@ -183,6 +188,23 @@ export async function GET() {
       ilike(emailCache.subject, "%medication%"),
     ];
 
+    // Build account filter
+    const accountFilter = accountIds.length > 0
+      ? [inArray(emailCache.accountId, accountIds)]
+      : [];
+
+    // Build date range filter
+    const dateRangeFilter: any[] = [];
+    if (startDate) {
+      dateRangeFilter.push(gte(emailCache.receivedAt, new Date(startDate)));
+    }
+    if (endDate) {
+      // Include the entire end date by setting to end of day
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+      dateRangeFilter.push(lte(emailCache.receivedAt, endDateTime));
+    }
+
     // Get all senders with unsubscribe patterns
     const unsubscribeSenders = await db
       .select({
@@ -196,7 +218,9 @@ export async function GET() {
       .where(
         and(
           or(...unsubscribePatterns),
-          ...excludePersonalEmails
+          ...excludePersonalEmails,
+          ...accountFilter,
+          ...dateRangeFilter
         )
       )
       .groupBy(emailCache.senderEmail, emailCache.sender)
@@ -216,7 +240,9 @@ export async function GET() {
       .where(
         and(
           or(...deletePatterns),
-          ...excludePersonalEmails
+          ...excludePersonalEmails,
+          ...accountFilter,
+          ...dateRangeFilter
         )
       )
       .groupBy(emailCache.senderEmail, emailCache.sender)
@@ -235,7 +261,9 @@ export async function GET() {
       .from(emailCache)
       .where(
         and(
-          ...excludePersonalEmails
+          ...excludePersonalEmails,
+          ...accountFilter,
+          ...dateRangeFilter
         )
       )
       .groupBy(emailCache.senderEmail, emailCache.sender)

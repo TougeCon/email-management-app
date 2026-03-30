@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -19,7 +21,7 @@ interface Suggestion {
   reason: string;
 }
 
-type BulkAction = "unsubscribe" | "delete" | "unsubscribe-and-delete";
+type BulkAction = "unsubscribe" | "delete" | "unsubscribe-and-delete" | "archive";
 
 interface Account {
   id: string;
@@ -52,12 +54,20 @@ export default function ManagePage() {
   const [deletionQueue, setDeletionQueue] = useState<DeletionQueueItem[]>([]);
   const [activeTab, setActiveTab] = useState<"all" | "unsubscribe" | "delete">("all");
   const [selectedAction, setSelectedAction] = useState<BulkAction>("unsubscribe-and-delete");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     fetchAccounts();
-    fetchSuggestions();
     fetchDeletionQueue();
   }, []);
+
+  useEffect(() => {
+    if (selectedAccounts.length > 0) {
+      fetchSuggestions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAccounts]);
 
   const fetchAccounts = async () => {
     try {
@@ -73,7 +83,13 @@ export default function ManagePage() {
   const fetchSuggestions = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/emails/suggestions");
+      const params = new URLSearchParams();
+      if (selectedAccounts.length > 0) {
+        selectedAccounts.forEach((id) => params.append("accountId", id));
+      }
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
+      const res = await fetch(`/api/emails/suggestions?${params.toString()}`);
       const data = await res.json();
 
       if (data.suggestions) {
@@ -175,7 +191,14 @@ export default function ManagePage() {
       .filter((s) => s.senderEmail && selected.has(s.senderEmail))
       .reduce((sum, s) => sum + s.count, 0);
 
-    let confirmMessage = `Selected Action: ${action === "unsubscribe-and-delete" ? "Unsubscribe & Delete All Emails" : action === "unsubscribe" ? "Unsubscribe Only" : "Delete Emails Only"}\n\n`;
+    const actionLabels = {
+      "unsubscribe": "Unsubscribe Only",
+      "delete": "Delete Emails Only",
+      "unsubscribe-and-delete": "Unsubscribe & Delete All",
+      "archive": "Archive Emails",
+    };
+
+    let confirmMessage = `Selected Action: ${actionLabels[action]}\n\n`;
     confirmMessage += `Processing ${selected.size} sender(s):\n\n`;
 
     if (action === "unsubscribe-and-delete" || action === "unsubscribe") {
@@ -183,6 +206,9 @@ export default function ManagePage() {
     }
     if (action === "unsubscribe-and-delete" || action === "delete") {
       confirmMessage += `• Delete ~${selectedDeleteCount.toLocaleString()} emails from ${deleteSenders} sender(s)\n`;
+    }
+    if (action === "archive") {
+      confirmMessage += `• Archive ~${selectedDeleteCount.toLocaleString()} emails from ${deleteSenders} sender(s)\n`;
     }
 
     if (!confirm(confirmMessage)) {
@@ -233,6 +259,25 @@ export default function ManagePage() {
             }
           }
         }
+
+        // Archive emails
+        if (action === "archive") {
+          const searchRes = await fetch(`/api/emails/search?sender=${encodeURIComponent(suggestion.senderEmail)}`);
+          const searchData = await searchRes.json();
+
+          if (searchData.emails && searchData.emails.length > 0) {
+            const emailIds = searchData.emails.map((e: any) => e.id);
+            const archiveRes = await fetch("/api/emails/archive", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ emailIds }),
+            });
+            const archiveData = await archiveRes.json();
+            if (archiveData.success) {
+              newlyProcessed.add(senderEmail);
+            }
+          }
+        }
       } catch (error) {
         console.error(`Failed to process ${senderEmail}:`, error);
       }
@@ -246,9 +291,16 @@ export default function ManagePage() {
     setSuggestions(suggestions.filter((s) => s.senderEmail && !newlyProcessed.has(s.senderEmail)));
     setSelected(new Set());
 
+    const actionLabelsComplete = {
+      "unsubscribe-and-delete": "Unsubscribed & deleted",
+      "unsubscribe": "Unsubscribed",
+      "delete": "Deleted",
+      "archive": "Archived",
+    };
+
     toast({
       title: "Processing complete",
-      description: `${action === "unsubscribe-and-delete" ? "Unsubscribed & deleted" : action === "unsubscribe" ? "Unsubscribed" : "Deleted"} ${newlyProcessed.size} sender(s)`,
+      description: `${actionLabelsComplete[action]} ${newlyProcessed.size} sender(s)`,
     });
 
     setProcessing(false);
@@ -382,6 +434,62 @@ export default function ManagePage() {
                 {account.displayName || account.emailAddress}
               </button>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Date Range Filter */}
+      <Card>
+        <CardHeader className="py-3">
+          <CardTitle className="text-sm">Date Range Filter</CardTitle>
+        </CardHeader>
+        <CardContent className="py-2">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="space-y-2">
+              <Label htmlFor="start-date" className="text-xs">Start Date</Label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="end-date" className="text-xs">End Date</Label>
+              <Input
+                id="end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchSuggestions}
+                disabled={loading}
+                className="w-full"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                Apply
+              </Button>
+            </div>
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setStartDate("");
+                  setEndDate("");
+                }}
+                className="w-full"
+              >
+                Clear
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -531,6 +639,16 @@ export default function ManagePage() {
                   >
                     <UserX className="mr-2 h-4 w-4" />
                     Unsubscribe & Delete All
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleBulkAction("archive")}
+                    disabled={processing}
+                    className="bg-green-600 text-white hover:bg-green-700 border-green-600"
+                  >
+                    <Archive className="mr-2 h-4 w-4" />
+                    Archive Emails
                   </Button>
                 </div>
               )}

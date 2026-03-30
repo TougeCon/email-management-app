@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Search, Mail, RefreshCw, Sparkles } from "lucide-react";
+import { Search, Mail, RefreshCw, Sparkles, Calendar } from "lucide-react";
 
 interface EmailResult {
   id: string;
@@ -33,6 +33,8 @@ export default function SearchPage() {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [senderFilter, setSenderFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [results, setResults] = useState<EmailResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
@@ -98,6 +100,8 @@ export default function SearchPage() {
       const params = new URLSearchParams({
         query: searchQuery,
         sender: senderFilter,
+        startDate: startDate,
+        endDate: endDate,
         accounts: selectedAccounts.join(","),
         page: pageNum.toString(),
         pageSize: pageSize.toString(),
@@ -225,6 +229,24 @@ export default function SearchPage() {
                 onChange={(e) => setSenderFilter(e.target.value)}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="start-date">Start Date</Label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="end-date">End Date</Label>
+              <Input
+                id="end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
           </div>
           <div className="flex gap-2 mt-4">
             <Button onClick={() => handleSearch(0)} disabled={loading}>
@@ -245,6 +267,8 @@ export default function SearchPage() {
               onClick={() => {
                 setSearchQuery("");
                 setSenderFilter("");
+                setStartDate("");
+                setEndDate("");
               }}
             >
               Clear
