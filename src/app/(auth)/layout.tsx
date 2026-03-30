@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,10 +12,11 @@ import {
   MessageSquare,
   LogOut,
   LayoutDashboard,
-  UserX,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ChatTray } from "@/components/chat-tray";
+import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -22,7 +24,6 @@ const navItems = [
   { href: "/search", label: "Search", icon: Search },
   { href: "/manage", label: "Manage", icon: Trash2 },
   { href: "/rules", label: "Rules", icon: Settings },
-  { href: "/ai-chat", label: "AI Chat", icon: MessageSquare },
 ];
 
 export default function DashboardLayout({
@@ -33,6 +34,7 @@ export default function DashboardLayout({
   const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const [chatOpen, setChatOpen] = useState(false);
 
   if (status === "loading") {
     return (
@@ -95,8 +97,26 @@ export default function DashboardLayout({
 
       {/* Main content */}
       <main className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-950">
-        <div className="container mx-auto p-6">{children}</div>
+        <div className="container mx-auto p-6">
+          {/* Chat Toggle Button */}
+          <div className="fixed bottom-6 right-6 z-40">
+            <Button
+              size="lg"
+              className={cn(
+                "rounded-full h-14 w-14 shadow-lg transition-all duration-300",
+                chatOpen ? "bg-secondary hover:bg-secondary" : "bg-blue-600 hover:bg-blue-700"
+              )}
+              onClick={() => setChatOpen(!chatOpen)}
+            >
+              <MessageSquare className="h-6 w-6" />
+            </Button>
+          </div>
+          {children}
+        </div>
       </main>
+
+      {/* Chat Tray */}
+      <ChatTray isOpen={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   );
 }

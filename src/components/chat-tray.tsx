@@ -3,9 +3,9 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Send, RefreshCw, Trash2 } from "lucide-react";
+import { Send, RefreshCw, Trash2, X, MessageSquare } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Message {
   role: "user" | "assistant";
@@ -20,7 +20,12 @@ interface Account {
   displayName: string | null;
 }
 
-export default function AIChatPage() {
+interface ChatTrayProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function ChatTray({ isOpen, onClose }: ChatTrayProps) {
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
@@ -31,9 +36,15 @@ export default function AIChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetchAccounts();
-    loadChatHistory();
-  }, []);
+    if (isOpen) {
+      fetchAccounts();
+      loadChatHistory();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const fetchAccounts = async () => {
     try {
@@ -109,12 +120,7 @@ export default function AIChatPage() {
     }
   };
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
   const executeAction = async (action: string, criteria: string) => {
-    // First, count how many emails would be affected
     const senderMatches = criteria.match(/from\s+([^\s,]+)/gi);
     const senderEmails = senderMatches?.map(m => m.replace(/from\s+/i, '').trim()) || [];
     const senderEmail = senderEmails[0] || null;
@@ -125,7 +131,6 @@ export default function AIChatPage() {
     const containingMatch = criteria.match(/containing\s+(?:the\s+word\s+)?['"]?([^'"]+)['"]?/i);
     const keyword = containingMatch ? containingMatch[1] : null;
 
-    // Preview: count matching emails first
     try {
       const previewRes = await fetch("/api/ai/action/preview", {
         method: "POST",
@@ -146,7 +151,6 @@ export default function AIChatPage() {
         return `No emails match that criteria.`;
       }
 
-      // Ask for confirmation if more than 10 emails
       if (previewData.count > 10) {
         const confirmed = confirm(
           `This will ${action.replace("_", " ")} ${previewData.count} emails. Are you sure you want to proceed?`
@@ -156,7 +160,6 @@ export default function AIChatPage() {
         }
       }
 
-      // Execute the action
       const res = await fetch("/api/ai/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -220,7 +223,6 @@ export default function AIChatPage() {
       if (data.response) {
         let responseContent = data.response;
 
-        // Check for ACTION: command
         const actionMatch = data.response.match(/ACTION:\s*(\w+)\s+(.+)/i);
         if (actionMatch) {
           const [, action, criteria] = actionMatch;
@@ -269,67 +271,69 @@ export default function AIChatPage() {
   ];
 
   return (
-    <div className="h-[calc(100vh-80px)] flex flex-col">
-      <div className="mb-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">AI Chat</h1>
-            <p className="text-muted-foreground">
-              Ask questions about your emails and take actions
-            </p>
+    <div
+      className={cn(
+        "fixed top-0 right-0 h-full w-[400px] bg-background border-l shadow-2xl transform transition-transform duration-300 ease-in-out z-50",
+        isOpen ? "translate-x-0" : "translate-x-full"
+      )}
+    >
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5" />
+            <h2 className="font-semibold">AI Assistant</h2>
           </div>
-          <Button variant="ghost" size="sm" onClick={clearChatHistory} disabled={loading}>
-            <Trash2 className="h-4 w-4 mr-2" />
-            Clear History
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={clearChatHistory} disabled={loading}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {/* Account Selection */}
-      <Card className="mb-4">
-        <CardHeader className="py-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm">Select Accounts</CardTitle>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={selectAllAccounts} disabled={loading}>
-                Select All
+        {/* Account Selection */}
+        <div className="p-3 border-b bg-muted/30">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium">Accounts</span>
+            <div className="flex gap-1">
+              <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={selectAllAccounts} disabled={loading}>
+                All
               </Button>
-              <Button variant="outline" size="sm" onClick={deselectAllAccounts} disabled={loading}>
-                Deselect All
+              <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={deselectAllAccounts} disabled={loading}>
+                None
               </Button>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="py-2">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1">
             {accounts.map((account) => (
               <button
                 key={account.id}
                 onClick={() => toggleAccount(account.id)}
-                className={`rounded-full px-3 py-1 text-xs transition-colors ${
+                className={`rounded-full px-2 py-0.5 text-xs transition-colors ${
                   selectedAccounts.includes(account.id)
                     ? "bg-primary text-primary-foreground"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
                 disabled={loading}
               >
-                {account.displayName || account.emailAddress}
+                {account.displayName || account.emailAddress.split('@')[0]}
               </button>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Messages */}
-      <Card className="flex-1 overflow-hidden flex flex-col mb-4">
-        <CardContent className="flex-1 overflow-y-auto p-4">
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4">
           {loadingHistory ? (
             <div className="flex items-center justify-center h-full">
               <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">Loading history...</span>
+              <span className="ml-2 text-muted-foreground">Loading...</span>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {messages.map((message, i) => (
                 <div
                   key={i}
@@ -338,10 +342,10 @@ export default function AIChatPage() {
                   }`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                    className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
                       message.role === "user"
                         ? "bg-primary text-primary-foreground"
-                        : "bg-gray-100 dark:bg-gray-800"
+                        : "bg-muted"
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{message.content}</p>
@@ -353,7 +357,7 @@ export default function AIChatPage() {
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-2">
+                  <div className="bg-muted rounded-lg px-3 py-2">
                     <RefreshCw className="h-4 w-4 animate-spin" />
                   </div>
                 </div>
@@ -361,38 +365,42 @@ export default function AIChatPage() {
               <div ref={messagesEndRef} />
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Quick Actions */}
-      <div className="flex flex-wrap gap-2 mb-2">
-        {quickActions.map((action) => (
-          <Button
-            key={action.label}
-            variant="outline"
-            size="sm"
-            onClick={() => setInput(action.query)}
-            disabled={loading || loadingHistory}
-          >
-            {action.label}
-          </Button>
-        ))}
-      </div>
+        {/* Quick Actions */}
+        <div className="p-3 border-t bg-muted/30">
+          <div className="flex flex-wrap gap-1 mb-2">
+            {quickActions.map((action) => (
+              <Button
+                key={action.label}
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setInput(action.query)}
+                disabled={loading || loadingHistory}
+              >
+                {action.label}
+              </Button>
+            ))}
+          </div>
+        </div>
 
-      {/* Input */}
-      <div className="flex gap-2">
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask about your emails or say 'delete emails from spam@example.com'..."
-          disabled={loading || loadingHistory}
-          className="flex-1"
-        />
-        <Button onClick={handleSend} disabled={loading || loadingHistory || !input.trim()}>
-          <Send className="h-4 w-4 mr-2" />
-          Send
-        </Button>
+        {/* Input */}
+        <div className="p-3 border-t">
+          <div className="flex gap-2">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask about your emails..."
+              disabled={loading || loadingHistory}
+              className="flex-1"
+            />
+            <Button onClick={handleSend} disabled={loading || loadingHistory || !input.trim()} size="sm">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
