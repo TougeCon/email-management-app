@@ -129,11 +129,11 @@ export default function ManagePage() {
   };
 
   const toggleSelectAll = () => {
-    const filtered = filteredSuggestions;
+    const filtered = filteredSuggestions.filter((s) => s.senderEmail !== null);
     if (selected.size === filtered.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(filtered.map((c) => c.senderEmail)));
+      setSelected(new Set(filtered.map((c) => c.senderEmail!)));
     }
   };
 
