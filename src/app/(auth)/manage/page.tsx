@@ -19,6 +19,8 @@ interface Suggestion {
   reason: string;
 }
 
+type BulkAction = "unsubscribe" | "delete" | "unsubscribe-and-delete";
+
 interface Account {
   id: string;
   provider: string;
@@ -48,6 +50,7 @@ export default function ManagePage() {
   const [loading, setLoading] = useState(true);
   const [deletionQueue, setDeletionQueue] = useState<DeletionQueueItem[]>([]);
   const [activeTab, setActiveTab] = useState<"all" | "unsubscribe" | "delete">("all");
+  const [selectedAction, setSelectedAction] = useState<BulkAction>("unsubscribe-and-delete");
 
   useEffect(() => {
     fetchAccounts();
@@ -145,7 +148,7 @@ export default function ManagePage() {
     return true;
   });
 
-  const handleAction = async () => {
+  const handleBulkAction = async (action: BulkAction) => {
     if (selected.size === 0) {
       toast({
         title: "No senders selected",
@@ -160,29 +163,28 @@ export default function ManagePage() {
       .length;
 
     const deleteSenders = suggestions
-      .filter((s) => s.senderEmail && selected.has(s.senderEmail) && s.actionType === "delete")
-      .length;
-
-    const totalEmails = suggestions
       .filter((s) => s.senderEmail && selected.has(s.senderEmail))
-      .reduce((sum, s) => sum + s.count, 0);
+      .length;
 
     const selectedUnsubscribeCount = suggestions
       .filter((s) => s.senderEmail && selected.has(s.senderEmail) && s.actionType === "unsubscribe")
       .reduce((sum, s) => sum + s.count, 0);
 
     const selectedDeleteCount = suggestions
-      .filter((s) => s.senderEmail && selected.has(s.senderEmail) && s.actionType === "delete")
+      .filter((s) => s.senderEmail && selected.has(s.senderEmail))
       .reduce((sum, s) => sum + s.count, 0);
 
-    if (!confirm(`This will process ${selected.size} sender(s):
+    let confirmMessage = `Selected Action: ${action === "unsubscribe-and-delete" ? "Unsubscribe & Delete All Emails" : action === "unsubscribe" ? "Unsubscribe Only" : "Delete Emails Only"}\n\n`;
+    confirmMessage += `Processing ${selected.size} sender(s):\n\n`;
 
-${selectedUnsubscribeCount > 0 ? `• Unsubscribe: ~${selectedUnsubscribeCount.toLocaleString()} emails from ${unsubscribeSenders} sender(s)` : ""}
-${selectedDeleteCount > 0 ? `• Delete: ~${selectedDeleteCount.toLocaleString()} emails from ${deleteSenders} sender(s)` : ""}
+    if (action === "unsubscribe-and-delete" || action === "unsubscribe") {
+      confirmMessage += `• Unsubscribe from ${unsubscribeSenders} sender(s)\n`;
+    }
+    if (action === "unsubscribe-and-delete" || action === "delete") {
+      confirmMessage += `• Delete ~${selectedDeleteCount.toLocaleString()} emails from ${deleteSenders} sender(s)\n`;
+    }
 
-Total: ~${totalEmails.toLocaleString()} emails
-
-Continue?`)) {
+    if (!confirm(confirmMessage)) {
       return;
     }
 
@@ -194,31 +196,31 @@ Continue?`)) {
       if (!suggestion || !suggestion.senderEmail) continue;
 
       try {
-        if (suggestion.actionType === "unsubscribe") {
+        // Unsubscribe if action includes it and sender supports it
+        if ((action === "unsubscribe" || action === "unsubscribe-and-delete") && suggestion.actionType === "unsubscribe") {
           const res = await fetch("/api/emails/unsubscribe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ senderEmail: suggestion.senderEmail }),
           });
-
           const data = await res.json();
           if (data.success) {
             newlyProcessed.add(senderEmail);
           }
-        } else if (suggestion.actionType === "delete") {
-          // Search for emails from this sender and delete them
+        }
+
+        // Delete emails if action includes it
+        if (action === "delete" || action === "unsubscribe-and-delete") {
           const searchRes = await fetch(`/api/emails/search?sender=${encodeURIComponent(suggestion.senderEmail)}`);
           const searchData = await searchRes.json();
 
           if (searchData.emails && searchData.emails.length > 0) {
             const emailIds = searchData.emails.map((e: any) => e.id);
-
             const deleteRes = await fetch("/api/emails/delete", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ emailIds }),
             });
-
             const deleteData = await deleteRes.json();
             if (deleteData.success) {
               newlyProcessed.add(senderEmail);
@@ -229,16 +231,16 @@ Continue?`)) {
         console.error(`Failed to process ${senderEmail}:`, error);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, 200));
     }
 
     setProcessed(newlyProcessed);
     setSuggestions(suggestions.filter((s) => s.senderEmail && !newlyProcessed.has(s.senderEmail)));
-    setSelected(new Set(selected));
+    setSelected(new Set());
 
     toast({
       title: "Processing complete",
-      description: `Processed ${newlyProcessed.size} sender(s)`,
+      description: `${action === "unsubscribe-and-delete" ? "Unsubscribed & deleted" : action === "unsubscribe" ? "Unsubscribed" : "Deleted"} ${newlyProcessed.size} sender(s)`,
     });
 
     setProcessing(false);
@@ -446,61 +448,84 @@ Continue?`)) {
             </Button>
           </div>
 
-          {/* Actions Bar */}
+          {/* Action Selection */}
           {filteredSuggestions.length > 0 && (
-            <div className="flex gap-2 mb-4 flex-wrap">
-              <Button variant="outline" size="sm" onClick={toggleSelectAll}>
-                {selected.size === filteredSuggestions.length ? "Deselect All" : "Select All"}
-              </Button>
-              {activeTab !== "unsubscribe" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const unsubscribeEmails = suggestions
-                      .filter(s => s.actionType === "unsubscribe")
-                      .map(s => s.senderEmail!);
-                    setSelected(new Set(unsubscribeEmails));
-                  }}
-                  className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                >
-                  Select All Unsubscribe ({suggestions.filter(s => s.actionType === "unsubscribe").length})
+            <div className="space-y-3 mb-4">
+              {/* Select All Controls */}
+              <div className="flex gap-2 flex-wrap">
+                <Button variant="outline" size="sm" onClick={toggleSelectAll}>
+                  {selected.size === filteredSuggestions.length ? "Deselect All" : "Select All"}
                 </Button>
-              )}
-              {activeTab !== "delete" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const deleteEmails = suggestions
-                      .filter(s => s.actionType === "delete")
-                      .map(s => s.senderEmail!);
-                    setSelected(new Set(deleteEmails));
-                  }}
-                  className="text-red-600 border-red-300 hover:bg-red-50"
-                >
-                  Select All Delete ({suggestions.filter(s => s.actionType === "delete").length})
-                </Button>
-              )}
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleAction}
-                disabled={selected.size === 0 || processing}
-                className={selected.size > 0 ? "bg-orange-600 hover:bg-orange-700" : ""}
-              >
-                {processing ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Process {selected.size} Sender(s)
-                  </>
+                {activeTab !== "unsubscribe" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const unsubscribeEmails = suggestions
+                        .filter(s => s.actionType === "unsubscribe")
+                        .map(s => s.senderEmail!);
+                      setSelected(new Set(unsubscribeEmails));
+                    }}
+                    className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                  >
+                    Select Unsubscribe ({suggestions.filter(s => s.actionType === "unsubscribe").length})
+                  </Button>
                 )}
-              </Button>
+                {activeTab !== "delete" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const deleteEmails = suggestions
+                        .filter(s => s.actionType === "delete")
+                        .map(s => s.senderEmail!);
+                      setSelected(new Set(deleteEmails));
+                    }}
+                    className="text-red-600 border-red-300 hover:bg-red-50"
+                  >
+                    Select Delete ({suggestions.filter(s => s.actionType === "delete").length})
+                  </Button>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              {selected.size > 0 && (
+                <div className="flex gap-2 flex-wrap p-3 bg-muted/50 rounded-lg border">
+                  <span className="text-sm font-medium self-center mr-2">
+                    With {selected.size} sender(s):
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleBulkAction("unsubscribe")}
+                    disabled={processing || !suggestions.some(s => selected.has(s.senderEmail!) && s.actionType === "unsubscribe")}
+                    className="bg-blue-600 text-white hover:bg-blue-700 border-blue-600"
+                  >
+                    <UserX className="mr-2 h-4 w-4" />
+                    Unsubscribe Only
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleBulkAction("delete")}
+                    disabled={processing}
+                    className="bg-red-600 text-white hover:bg-red-700 border-red-600"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Emails Only
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => handleBulkAction("unsubscribe-and-delete")}
+                    disabled={processing}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    <UserX className="mr-2 h-4 w-4" />
+                    Unsubscribe & Delete All
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
