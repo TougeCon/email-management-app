@@ -239,21 +239,29 @@ export default function AccountsPage() {
         if (syncData.success) {
           totalSynced += syncData.syncedCount;
           lastMessageId = syncData.lastMessageId;
-          if (!syncData.hasMore) break;
 
-          // Update UI with progress every 5 chunks
-          if (chunkCount % 5 === 0) {
+          // Log progress for debugging
+          console.log(`[Sync] Chunk ${chunkCount}: synced ${syncData.syncedCount}, total: ${totalSynced}, hasMore: ${syncData.hasMore}`);
+
+          if (!syncData.hasMore) {
+            console.log(`[Sync] No more emails to sync`);
+            break;
+          }
+
+          // Update UI with progress every chunk for large mailboxes
+          if (chunkCount % 2 === 0 || totalSynced < 1000) {
             toast({
               title: "Syncing...",
-              description: `Synced ${totalSynced.toLocaleString()} emails so far...`,
+              description: `Chunk ${chunkCount}: Synced ${totalSynced.toLocaleString()} emails so far...`,
             });
           }
         } else {
+          console.error(`[Sync] Chunk ${chunkCount} failed:`, syncData.error);
           throw new Error(syncData.error || "Sync failed");
         }
 
         // Small delay between chunks to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
       if (chunkCount >= maxChunks) {

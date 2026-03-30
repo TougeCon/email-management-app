@@ -129,8 +129,11 @@ async function syncGmailChunk(
     }
   }
 
+  const hasMore = !!listResponse.data.nextPageToken;
+  console.log(`[Gmail] Synced ${syncedCount} emails, hasMore: ${hasMore}, messages fetched: ${messages.length}`);
+
   return {
-    hasMore: !!listResponse.data.nextPageToken,
+    hasMore,
     lastMessageId: listResponse.data.nextPageToken || null,
     syncedCount,
   };
