@@ -46,19 +46,6 @@ export default function AccountsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Warn user if they try to leave during sync
-  useEffect(() => {
-    if (syncingAccount) {
-      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-        e.preventDefault();
-        e.returnValue = "A bulk sync is in progress. Leaving now will stop the sync. Continue?";
-        return e.returnValue;
-      };
-      window.addEventListener("beforeunload", handleBeforeUnload);
-      return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-    }
-  }, [syncingAccount]);
-
   // Check for OAuth callback messages
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -302,6 +289,19 @@ export default function AccountsPage() {
   };
 
   const [syncingAccount, setSyncingAccount] = useState<string | null>(null);
+
+  // Warn user if they try to leave during sync
+  useEffect(() => {
+    if (syncingAccount) {
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        e.preventDefault();
+        e.returnValue = "A bulk sync is in progress. Leaving now will stop the sync. Continue?";
+        return e.returnValue;
+      };
+      window.addEventListener("beforeunload", handleBeforeUnload);
+      return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }
+  }, [syncingAccount]);
 
   return (
     <div className="space-y-6">
