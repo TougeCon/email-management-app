@@ -212,28 +212,64 @@ export default function AccountsPage() {
     }
 
     setSyncingAccount(accountId);
+    let totalSynced = 0;
+    let chunkCount = 0;
+    const maxChunks = 200; // Safety limit to prevent infinite loops
+
     try {
-      const res = await fetch("/api/sync/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId }),
-      });
+      // Use chunked sync for large mailboxes - each chunk syncs 500 emails
+      // This avoids request timeouts by making multiple shorter requests
+      let lastMessageId: string | null = null;
+      let hasMore = true;
 
-      const data = await res.json();
+      while (hasMore && chunkCount < maxChunks) {
+        chunkCount++;
 
-      if (data.success) {
-        toast({
-          title: "Bulk sync complete",
-          description: `Synced ${data.totalEmailsSynced} emails from all folders.`,
+        const res = await fetch("/api/sync/chunked", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accountId,
+            chunkSize: 500,
+            lastMessageId,
+          }),
         });
-        fetchAccounts();
+
+        const data = await res.json();
+
+        if (data.success) {
+          totalSynced += data.syncedCount;
+          hasMore = data.hasMore;
+          lastMessageId = data.lastMessageId;
+
+          // Update UI with progress every 5 chunks
+          if (chunkCount % 5 === 0) {
+            toast({
+              title: "Syncing...",
+              description: `Synced ${totalSynced.toLocaleString()} emails so far...`,
+            });
+          }
+        } else {
+          throw new Error(data.error || "Sync failed");
+        }
+
+        // Small delay between chunks to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      if (chunkCount >= maxChunks) {
+        toast({
+          title: "Sync paused",
+          description: `Synced ${totalSynced.toLocaleString()} emails. Click "Bulk Sync ALL" again to continue.`,
+          variant: "default",
+        });
       } else {
         toast({
-          title: "Bulk sync failed",
-          description: data.error || "Failed to sync emails",
-          variant: "destructive",
+          title: "Bulk sync complete",
+          description: `Synced ${totalSynced.toLocaleString()} emails from all folders.`,
         });
       }
+      fetchAccounts();
     } catch (error) {
       toast({
         title: "Error",

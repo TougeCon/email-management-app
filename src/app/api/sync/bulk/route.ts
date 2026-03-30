@@ -161,43 +161,51 @@ async function syncGmailAllLabels(accountId: string, accessToken: string): Promi
       const messages = listResponse.data.messages || [];
       pageToken = listResponse.data.nextPageToken || undefined;
 
-      // Fetch message details in batches
-      for (let i = 0; i < Math.min(messages.length, 100); i++) {
-        const message = messages[i];
-        try {
-          const fullMessage = await gmail.users.messages.get({
-            userId: "me",
-            id: message.id!,
-            format: "full",
-            metadataHeaders: ["From", "To", "Subject", "Date"],
-          });
+      // Fetch message details - process ALL messages (not limited)
+      // Process in batches of 50 to avoid rate limits
+      const batchSize = 50;
+      for (let batchStart = 0; batchStart < messages.length; batchStart += batchSize) {
+        const batch = messages.slice(batchStart, batchStart + batchSize);
 
-          const headers = fullMessage.data.payload?.headers || [];
-          const getHeader = (name: string) =>
-            headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || null;
+        for (const message of batch) {
+          try {
+            const fullMessage = await gmail.users.messages.get({
+              userId: "me",
+              id: message.id!,
+              format: "full",
+              metadataHeaders: ["From", "To", "Subject", "Date"],
+            });
 
-          const from = getHeader("from") || "";
-          const fromEmail = extractEmail(from);
-          const dateStr = getHeader("date");
-          const bodyPreview = extractGmailBody(fullMessage.data.payload);
+            const headers = fullMessage.data.payload?.headers || [];
+            const getHeader = (name: string) =>
+              headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || null;
 
-          await db.insert(emailCache).values({
-            id: uuidv4(),
-            accountId: accountId,
-            providerEmailId: message.id!,
-            subject: getHeader("subject"),
-            sender: from,
-            senderEmail: fromEmail,
-            receivedAt: dateStr ? new Date(dateStr) : new Date(),
-            isRead: !fullMessage.data.labelIds?.includes("UNREAD"),
-            snippet: fullMessage.data.snippet || null,
-            bodyPreview: bodyPreview || null,
-            cachedAt: new Date(),
-          });
-          totalEmails++;
-        } catch (err) {
-          console.error("Failed to fetch Gmail message:", err);
+            const from = getHeader("from") || "";
+            const fromEmail = extractEmail(from);
+            const dateStr = getHeader("date");
+            const bodyPreview = extractGmailBody(fullMessage.data.payload);
+
+            await db.insert(emailCache).values({
+              id: uuidv4(),
+              accountId: accountId,
+              providerEmailId: message.id!,
+              subject: getHeader("subject"),
+              sender: from,
+              senderEmail: fromEmail,
+              receivedAt: dateStr ? new Date(dateStr) : new Date(),
+              isRead: !fullMessage.data.labelIds?.includes("UNREAD"),
+              snippet: fullMessage.data.snippet || null,
+              bodyPreview: bodyPreview || null,
+              cachedAt: new Date(),
+            });
+            totalEmails++;
+          } catch (err) {
+            console.error("Failed to fetch Gmail message:", err);
+          }
         }
+
+        // Small delay between batches to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     } while (pageToken);
   }
