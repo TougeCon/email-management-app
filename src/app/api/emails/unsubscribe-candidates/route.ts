@@ -1,8 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { emailCache, emailAccounts } from "@/lib/db/schema";
-import { desc, count, eq, or, ilike, and, not, gt } from "drizzle-orm";
-import { decrypt } from "@/lib/encryption";
+import { emailCache } from "@/lib/db/schema";
+import { desc, count, eq, or, ilike, and, not } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -29,8 +28,8 @@ export async function GET() {
       ilike(emailCache.senderEmail, "%marketing%"),
     ];
 
-    // Get high-volume senders (3+ emails) - likely to be newsletters/marketing
-    const highVolumeSenders = await db
+    // Get all senders with marketing patterns first
+    const allSenders = await db
       .select({
         senderEmail: emailCache.senderEmail,
         sender: emailCache.sender,
@@ -49,9 +48,11 @@ export async function GET() {
         )
       )
       .groupBy(emailCache.senderEmail, emailCache.sender)
-      .having(({ count }) => gt(count, 2)) // At least 3 emails
       .orderBy(desc(count()))
       .limit(200);
+
+    // Filter in JavaScript for 3+ emails (having clause doesn't work with Drizzle ORM)
+    const highVolumeSenders = allSenders.filter(s => Number(s.count) >= 3);
 
     // Step 2: For each candidate sender, check if they have unsubscribe patterns
     const candidates = [];
@@ -84,153 +85,4 @@ export async function GET() {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return Response.json({ error: "Internal server error", details: errorMessage }, { status: 500 });
   }
-}
-
-// Check provider directly for unsubscribe info
-async function checkProviderForUnsubscribe(
-  account: any,
-  email: { id: string; accountId: string; providerEmailId: string }
-) {
-  try {
-    const accessToken = decrypt(account.encryptedAccessToken);
-
-    if (account.provider === "gmail") {
-      const { google } = await import("googleapis");
-      const { OAuth2Client } = await import("google-auth-library");
-
-      const client = new OAuth2Client({
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      });
-      client.setCredentials({ access_token: accessToken });
-
-      const gmail = google.gmail({ version: "v1", auth: client });
-
-      // Get full message with body to scan for unsubscribe anywhere
-      const message = await gmail.users.messages.get({
-        userId: "me",
-        id: email.id,
-        format: "full",
-      });
-
-      // Check headers for List-Unsubscribe
-      const headers = message.data.payload?.headers || [];
-      const listUnsubscribeHeader = headers.find(
-        (h) => h.name === "List-Unsubscribe"
-      )?.value;
-
-      // Extract and decode full body to scan for unsubscribe text
-      let fullBody = "";
-      const extractBody = (part: any) => {
-        if (part.body?.data) {
-          fullBody += Buffer.from(part.body.data, "base64").toString("utf-8");
-        }
-        if (part.parts) {
-          for (const p of part.parts) extractBody(p);
-        }
-      };
-      extractBody(message.data.payload);
-
-      const lowerBody = fullBody.toLowerCase();
-      const hasUnsubscribeText = lowerBody.includes("unsubscribe") ||
-        lowerBody.includes("opt-out") ||
-        lowerBody.includes("opt out") ||
-        lowerBody.includes("manage preferences");
-
-      return {
-        hasListUnsubscribe: !!listUnsubscribeHeader,
-        hasUnsubscribe: hasUnsubscribeText || !!listUnsubscribeHeader,
-      };
-    } else if (account.provider === "outlook") {
-      const { Client } = await import("@microsoft/microsoft-graph-client");
-
-      const graphClient = Client.init({
-        authProvider: (done) => {
-          done(null, accessToken);
-        },
-      });
-
-      // Get full message with body to scan for unsubscribe anywhere
-      const msg: any = await graphClient
-        .api(`/me/messages/${email.id}`)
-        .select("internetMessageHeaders,body")
-        .get();
-
-      // Check headers for List-Unsubscribe
-      const headers = msg.internetMessageHeaders || [];
-      const listUnsubscribeHeader = headers.find(
-        (h: any) => h.name === "List-Unsubscribe"
-      )?.value;
-
-      // Scan full body for unsubscribe text
-      const bodyContent = msg.body?.content || "";
-      const lowerBody = bodyContent.toLowerCase();
-      const hasUnsubscribeText = lowerBody.includes("unsubscribe") ||
-        lowerBody.includes("opt-out") ||
-        lowerBody.includes("opt out") ||
-        lowerBody.includes("manage preferences");
-
-      return {
-        hasListUnsubscribe: !!listUnsubscribeHeader,
-        hasUnsubscribe: hasUnsubscribeText || !!listUnsubscribeHeader,
-      };
-    } else if (account.provider === "aol") {
-      // AOL uses IMAP - fetch full email to check for unsubscribe links anywhere in body
-      const { ImapFlow } = await import("imapflow");
-
-      const client = new ImapFlow({
-        host: "imap.aol.com",
-        port: 993,
-        secure: true,
-        auth: {
-          user: account.emailAddress,
-          pass: accessToken, // App password
-        },
-        logger: false,
-      });
-
-      try {
-        await client.connect();
-        await client.mailboxOpen("INBOX");
-
-        // Fetch full email source
-        const messages = await client.fetch(`*:${email.providerEmailId}`, {
-          uid: true,
-          source: true,
-        });
-
-        for await (const msg of messages) {
-          if (msg.uid?.toString() === email.providerEmailId && msg.source) {
-            const sourceText = Buffer.from(msg.source).toString("utf-8");
-            const lowerText = sourceText.toLowerCase();
-
-            // Check for List-Unsubscribe header
-            const listUnsubscribeMatch = sourceText.match(/List-Unsubscribe:\s*([^\r\n]+)/i);
-            const hasListUnsubscribe = !!listUnsubscribeMatch;
-
-            // Scan FULL body for unsubscribe patterns (not just first 500 chars)
-            // Look for patterns anywhere in the email
-            const hasUnsubscribeText = lowerText.includes("unsubscribe") ||
-              lowerText.includes("opt-out") ||
-              lowerText.includes("opt out") ||
-              lowerText.includes("manage preferences") ||
-              lowerText.includes("email preferences");
-
-            return {
-              hasListUnsubscribe,
-              hasUnsubscribe: hasUnsubscribeText || hasListUnsubscribe,
-            };
-          }
-        }
-      } finally {
-        await client.logout().catch(() => {});
-      }
-    }
-  } catch (err) {
-    console.error("Provider check failed:", err);
-    // Return null to indicate failure - caller should handle gracefully
-    return null;
-  }
-
-  return { hasListUnsubscribe: false, hasUnsubscribe: false };
 }
