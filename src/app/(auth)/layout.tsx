@@ -20,8 +20,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/accounts", label: "Accounts", icon: Mail },
   { href: "/search", label: "Search", icon: Search },
-  { href: "/cleanup", label: "Cleanup", icon: Trash2 },
-  { href: "/unsubscribe", label: "Unsubscribe", icon: UserX },
+  { href: "/manage", label: "Manage", icon: Trash2 },
   { href: "/rules", label: "Rules", icon: Settings },
   { href: "/ai-chat", label: "AI Chat", icon: MessageSquare },
 ];
